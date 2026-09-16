@@ -1,6 +1,8 @@
 """차량 매뉴얼 문서를 읽어 청크로 나누고 Chroma 벡터스토어에 적재·검색하는 RAG 파이프라인."""
 import os
 import re
+import threading
+import time
 from glob import glob
 from typing import Optional
 
@@ -48,8 +50,11 @@ def _load_chunks() -> list[Document]:
     return splitter.split_documents(_load_documents())
 
 
-def get_vectorstore() -> Chroma:
-    """Chroma 벡터스토어를 반환한다. 없으면 새로 빌드하고, 있으면 그대로 불러와 재사용한다."""
+_vectorstore: Optional[Chroma] = None
+_vectorstore_lock = threading.Lock()
+
+
+def _build_vectorstore() -> Chroma:
     if os.path.exists(os.path.join(PERSIST_DIR, "chroma.sqlite3")):
         return Chroma(
             collection_name=COLLECTION_NAME,
@@ -62,6 +67,29 @@ def get_vectorstore() -> Chroma:
         collection_name=COLLECTION_NAME,
         persist_directory=PERSIST_DIR,
     )
+
+
+def get_vectorstore() -> Chroma:
+    """Chroma 벡터스토어를 반환한다. 프로세스당 한 번만 만들어 재사용한다(같은 경로로 PersistentClient를
+    여러 번 새로 열면 chromadb가 이전 클라이언트를 정리하는 과정에서 오류를 내는 경우가 있어 캐싱한다).
+    LangGraph의 ToolNode는 도구를 별도 워커 스레드에서 실행하므로, 락으로 동시 생성 시도를 막고
+    chromadb의 Rust 바인딩이 간헐적으로 내는 초기화 오류(AttributeError/ValueError)는 재시도로 넘긴다."""
+    global _vectorstore
+    if _vectorstore is not None:
+        return _vectorstore
+    with _vectorstore_lock:
+        if _vectorstore is None:
+            last_error = None
+            for attempt in range(3):
+                try:
+                    _vectorstore = _build_vectorstore()
+                    break
+                except (AttributeError, ValueError) as e:
+                    last_error = e
+                    time.sleep(0.2)
+            else:
+                raise last_error
+    return _vectorstore
 
 
 def get_retriever(vehicle_type: Optional[str] = None, k: int = 3):
