@@ -1,0 +1,112 @@
+[
+  {
+    "title": "강남모터스 정비소",
+    "link": "https://example.com/places/1",
+    "category": "자동차정비>카센터",
+    "description": "국산·수입차 정비 전문 카센터",
+    "telephone": "02-1234-5678",
+    "address": "서울 강남구 테헤란로 123",
+    "roadAddress": "서울 강남구 테헤란로 123",
+    "mapx": "127047345",
+    "mapy": "37507907"
+  },
+  {
+    "title": "강남퀵카센터",
+    "link": "https://example.com/places/2",
+    "category": "자동차정비>카센터",
+    "description": "엔진오일, 타이어 교체 당일 가능",
+    "telephone": "02-2345-6789",
+    "address": "서울 강남구 강남대로 45",
+    "roadAddress": "서울 강남구 강남대로 45",
+    "mapx": "127028179",
+    "mapy": "37497942"
+  },
+  {
+    "title": "강남역 스타벅스",
+    "link": "https://example.com/places/3",
+    "category": "음식점>카페",
+    "description": "강남역 인근 카페",
+    "telephone": "02-3456-7890",
+    "address": "서울 강남구 강남대로 396",
+    "roadAddress": "서울 강남구 강남대로 396",
+    "mapx": "127027926",
+    "mapy": "37498095"
+  },
+  {
+    "title": "홍대오토클리닉",
+    "link": "https://example.com/places/4",
+    "category": "자동차정비>카센터",
+    "description": "외제차 전문 정비소",
+    "telephone": "02-4567-8901",
+    "address": "서울 마포구 양화로 100",
+    "roadAddress": "서울 마포구 양화로 100",
+    "mapx": "126922290",
+    "mapy": "37556862"
+  },
+  {
+    "title": "홍대타이어월드",
+    "link": "https://example.com/places/5",
+    "category": "자동차정비>타이어전문",
+    "description": "타이어 전문 판매 및 교체",
+    "telephone": "02-5678-9012",
+    "address": "서울 마포구 월드컵로 50",
+    "roadAddress": "서울 마포구 월드컵로 50",
+    "mapx": "126919483",
+    "mapy": "37556673"
+  },
+  {
+    "title": "홍대돈까스",
+    "link": "https://example.com/places/6",
+    "category": "음식점>일식",
+    "description": "홍대입구역 인근 돈까스 맛집",
+    "telephone": "02-6789-0123",
+    "address": "서울 마포구 어울마당로 30",
+    "roadAddress": "서울 마포구 어울마당로 30",
+    "mapx": "126923012",
+    "mapy": "37556289"
+  },
+  {
+    "title": "잠실중앙카센터",
+    "link": "https://example.com/places/7",
+    "category": "자동차정비>카센터",
+    "description": "국산차 정기점검 전문",
+    "telephone": "02-7890-1234",
+    "address": "서울 송파구 올림픽로 240",
+    "roadAddress": "서울 송파구 올림픽로 240",
+    "mapx": "127100108",
+    "mapy": "37513294"
+  },
+  {
+    "title": "잠실약국",
+    "link": "https://example.com/places/8",
+    "category": "약국",
+    "description": "잠실역 인근 약국",
+    "telephone": "02-8901-2345",
+    "address": "서울 송파구 잠실동 12",
+    "roadAddress": "서울 송파구 올림픽로 300",
+    "mapx": "127100523",
+    "mapy": "37513601"
+  },
+  {
+    "title": "판교테크노정비소",
+    "link": "https://example.com/places/9",
+    "category": "자동차정비>카센터",
+    "description": "판교 테크노밸리 인근 정비소",
+    "telephone": "031-1234-5678",
+    "address": "경기 성남시 분당구 판교역로 100",
+    "roadAddress": "경기 성남시 분당구 판교역로 100",
+    "mapx": "127111206",
+    "mapy": "37394648"
+  },
+  {
+    "title": "판교24시정비",
+    "link": "https://example.com/places/10",
+    "category": "자동차정비>카센터",
+    "description": "24시간 운영 긴급출동 정비",
+    "telephone": "031-2345-6789",
+    "address": "경기 성남시 분당구 대왕판교로 200",
+    "roadAddress": "경기 성남시 분당구 대왕판교로 200",
+    "mapx": "127111890",
+    "mapy": "37393920"
+  }
+]

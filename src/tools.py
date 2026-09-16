@@ -1,4 +1,5 @@
 """도메인 도구 정의."""
+import json
 import os
 import sqlite3
 from datetime import date as _date
@@ -204,3 +205,49 @@ def delete_maintenance_record(record_id: int, confirm: bool = False) -> str:
     conn.commit()
     conn.close()
     return f"정비이력 {record_id}번을 삭제했습니다."
+
+
+# ── 지역 정보 검색 (더미, 이후 네이버 지역검색 API로 교체 예정) ──────────
+
+PLACES_PATH = "data/local_places.json"
+
+
+def _load_places() -> list[dict]:
+    """지역 장소 더미 데이터를 읽어 반환한다."""
+    import json
+
+    with open(PLACES_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _search_naver_local(query: str, display: int = 5) -> list[dict]:
+    """네이버 지역검색 API 호출을 대신하는 더미 구현.
+    실제 API로 교체할 때는 이 함수 내부만 requests.get(...) 호출로 바꾸면 된다."""
+    keywords = query.lower().split()
+    places = _load_places()
+
+    def score(place: dict) -> int:
+        haystack = " ".join(
+            str(place.get(field, "")) for field in ("title", "category", "address", "description")
+        ).lower()
+        return sum(1 for kw in keywords if kw in haystack)
+
+    ranked = [p for p in places if score(p) > 0]
+    ranked.sort(key=score, reverse=True)
+    return ranked[:display]
+
+
+@tool
+def search_local_places(query: str, display: int = 5) -> str:
+    """지역/업종 검색어로 장소 정보(이름, 카테고리, 주소, 전화번호 등)를 조회하는 지역 검색 도구다.
+    이 도구는 정비소 전용이 아닌 범용 지역 검색이므로, 정비소를 찾으려면 검색어에 지역명과 함께
+    '카센터' 또는 '자동차정비' 같은 업종 키워드를 반드시 함께 넣어야 한다."""
+    results = _search_naver_local(query, display=display)
+    if not results:
+        return "검색 결과가 없습니다."
+    return "\n\n".join(
+        f"[{p['title']}] {p['category']}\n"
+        f"주소: {p['address']}\n"
+        f"전화: {p['telephone']}"
+        for p in results
+    )
