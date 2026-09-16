@@ -51,8 +51,11 @@ def get_text(message):
 
 
 def run(question: str) -> None:
-    """질문 하나를 Supervisor 그래프에 흘려보내며 호출된 에이전트/도구와 답변을 출력한다."""
+    """질문 하나를 Supervisor 그래프에 흘려보내며 호출된 에이전트/도구와 답변을 출력한다.
+    supervisor 노드는 결정을 내릴 때마다 그때까지의 전체 메시지 목록을 다시 돌려주므로,
+    이미 출력한 메시지는 id로 걸러내 한 번씩만 보여준다."""
     print(f"질문: {question}")
+    seen_ids: set[str] = set()
     for event in app.stream(
         {"messages": [HumanMessage(content=question)]},
         stream_mode="updates",
@@ -60,6 +63,11 @@ def run(question: str) -> None:
     ):
         for node, update in event.items():
             for m in (update or {}).get("messages", []):
+                mid = getattr(m, "id", None)
+                if mid is not None:
+                    if mid in seen_ids:
+                        continue
+                    seen_ids.add(mid)
                 if getattr(m, "tool_calls", None):
                     for tc in m.tool_calls:
                         print(f"  [{node}] 도구 호출: {tc['name']}({tc.get('args', {})})")
