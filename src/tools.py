@@ -29,10 +29,9 @@ def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str
 # ── 정비이력 관리 (SQLite) ────────────────────────────────────────────
 
 DB_PATH = "data/maintenance.db"
-SCHEMA_PATH = "data/schema.sql"
 SEED_PATH = "data/seed.json"
 
-# 시딩(DML)만 ORM으로 처리한다. 나머지 CRUD 도구는 기존대로 sqlite3를 직접 사용한다.
+# 테이블 스키마는 ORM 모델로만 정의하고(단일 소스), 나머지 CRUD 도구는 기존대로 sqlite3를 직접 사용한다.
 Base = declarative_base()
 
 
@@ -53,11 +52,13 @@ class _MaintenanceRecord(Base):
     next_due_date = Column(String)
 
 
+_engine = create_engine(f"sqlite:///{DB_PATH}")
+_Session = sessionmaker(bind=_engine)
+
+
 def _seed_if_empty() -> None:
     """차량 마스터가 비어 있을 때만 data/seed.json의 샘플 데이터를 읽어 ORM으로 시딩한다."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    engine = create_engine(f"sqlite:///{DB_PATH}")
-    session = sessionmaker(bind=engine)()
+    session = _Session()
     if session.query(func.count(_Vehicle.vehicle_no)).scalar() == 0:
         with open(SEED_PATH, "r", encoding="utf-8") as f:
             seed = json.load(f)
@@ -76,12 +77,9 @@ def _get_connection() -> sqlite3.Connection:
 
 
 def _init_db() -> None:
-    """data/schema.sql로 테이블을 만들고(DDL), 비어 있으면 data/seed.json을 ORM으로 시딩한다(DML)."""
-    conn = _get_connection()
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        conn.executescript(f.read())
-    conn.commit()
-    conn.close()
+    """ORM 모델 스키마로 테이블을 만들고, 비어 있으면 data/seed.json을 ORM으로 시딩한다."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    Base.metadata.create_all(_engine, checkfirst=True)
     _seed_if_empty()
 
 
