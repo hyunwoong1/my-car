@@ -7,6 +7,7 @@ from langgraph_supervisor import create_supervisor
 from agent_car_mgmt import maintenance_agent
 from agent_location import location_agent
 from agent_manual import manual_search_agent
+from tracer import FileTracer, get_text
 
 load_dotenv()
 
@@ -41,40 +42,13 @@ supervisor = create_supervisor(
 )
 app = supervisor.compile()
 
-
-def get_text(message):
-    """ChatBedrockConverse 응답 메시지에서 텍스트만 추출해 반환한다."""
-    content = message.content
-    if isinstance(content, list):
-        return "".join(block.get("text", "") for block in content if isinstance(block, dict))
-    return content
-
-
-def run(question: str) -> None:
-    """질문 하나를 Supervisor 그래프에 흘려보내며 호출된 에이전트/도구와 답변을 출력한다.
-    supervisor 노드는 결정을 내릴 때마다 그때까지의 전체 메시지 목록을 다시 돌려주므로,
-    이미 출력한 메시지는 id로 걸러내 한 번씩만 보여준다."""
-    print(f"질문: {question}")
-    seen_ids: set[str] = set()
-    for event in app.stream(
-        {"messages": [HumanMessage(content=question)]},
-        stream_mode="updates",
-        config={"recursion_limit": 25},
-    ):
-        for node, update in event.items():
-            for m in (update or {}).get("messages", []):
-                mid = getattr(m, "id", None)
-                if mid is not None:
-                    if mid in seen_ids:
-                        continue
-                    seen_ids.add(mid)
-                if getattr(m, "tool_calls", None):
-                    for tc in m.tool_calls:
-                        print(f"  [{node}] 도구 호출: {tc['name']}({tc.get('args', {})})")
-                elif getattr(m, "content", None):
-                    label = getattr(m, "name", None) or node
-                    print(f"  [{label}] {get_text(m)}")
+tracer = FileTracer("trace.jsonl")
 
 
 if __name__ == "__main__":
-    run("12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘")
+    question = "12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘"
+    result = app.invoke(
+        {"messages": [HumanMessage(content=question)]},
+        {"callbacks": [tracer], "recursion_limit": 25},
+    )
+    print(get_text(result["messages"][-1]))
