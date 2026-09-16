@@ -47,8 +47,20 @@ tracer = FileTracer("trace.jsonl")
 
 if __name__ == "__main__":
     question = "12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘"
-    result = app.invoke(
+    last_node = None
+    for chunk, metadata in app.stream(
         {"messages": [HumanMessage(content=question)]},
         {"callbacks": [tracer], "recursion_limit": 25},
-    )
-    print(get_text(result["messages"][-1]))
+        stream_mode="messages",
+    ):
+        if getattr(chunk, "type", None) != "ai":
+            continue  # 도구 호출 결과 등은 trace.jsonl에만 남기고 콘솔은 답변 텍스트만 스트리밍한다
+        text = get_text(chunk)
+        if not text:
+            continue
+        node = metadata.get("langgraph_node")
+        if node != last_node:
+            print(f"\n[{node}] ", end="", flush=True)
+            last_node = node
+        print(text, end="", flush=True)
+    print()
