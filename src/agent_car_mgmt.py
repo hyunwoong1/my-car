@@ -16,7 +16,7 @@ from tools import (
 load_dotenv()
 
 llm = ChatBedrockConverse(
-    model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
     region_name="us-east-1",
     temperature=0,
 )
@@ -36,7 +36,9 @@ maintenance_agent = create_agent(
         "차량번호 외의 소유자 개인정보(이름, 전화번호 등)는 절대 답변에 담지 마세요. "
         "정비이력 수정·삭제처럼 되돌리기 어려운 작업은 먼저 사용자에게 말로 재확인을 받은 뒤에만 "
         "confirm=True로 도구를 호출하세요. 조회 결과가 없거나 등록되지 않은 차량이면 지어내지 말고 "
-        "그대로 안내하세요."
+        "그대로 안내하세요. 경고등 의미, 점검 주기, 자가정비, 고장 증상, 안전수칙 같은 차량 매뉴얼 지식은 "
+        "당신의 담당이 아니니 스스로 설명을 만들어 답하지 마세요. 그런 질문이 섞여 있으면 정비이력 관련 "
+        "부분만 답하고, 매뉴얼 관련 내용은 다른 담당자가 안내한다고만 언급하세요."
     ),
     name="maintenance_agent",
 )

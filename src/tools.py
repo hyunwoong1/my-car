@@ -123,22 +123,29 @@ def list_vehicles() -> str:
 
 @tool
 def get_maintenance_history(vehicle_no: str) -> str:
-    """차량번호로 정비이력(날짜, 항목, 비용, 다음 점검 권장일)을 조회한다.
+    """차량번호로 정비이력(날짜, 항목, 비용, 다음 점검 권장일)을 조회한다. 결과에 차종(vehicle_type)도
+    함께 포함되므로, 이어서 매뉴얼을 검색할 때는 그 차종을 참고해야 한다.
     등록되지 않은 차량번호면 지어내지 말고 등록되지 않았다고 안내한다."""
-    if not _vehicle_exists(vehicle_no):
-        return f"{vehicle_no}는 등록되지 않은 차량입니다."
     conn = _get_connection()
+    vehicle = conn.execute(
+        "SELECT vehicle_type FROM vehicles WHERE vehicle_no = ?", (vehicle_no,)
+    ).fetchone()
+    if vehicle is None:
+        conn.close()
+        return f"{vehicle_no}는 등록되지 않은 차량입니다."
     rows = conn.execute(
         "SELECT id, date, item, cost, next_due_date FROM maintenance_records WHERE vehicle_no = ? ORDER BY date DESC",
         (vehicle_no,),
     ).fetchall()
     conn.close()
+    header = f"차종: {vehicle['vehicle_type']}"
     if not rows:
-        return f"{vehicle_no} 차량의 정비이력이 없습니다."
-    return "\n".join(
+        return f"{header}\n{vehicle_no} 차량의 정비이력이 없습니다."
+    body = "\n".join(
         f"[{r['id']}] {r['date']} - {r['item']} (비용: {r['cost']}원, 다음 점검 권장일: {r['next_due_date']})"
         for r in rows
     )
+    return f"{header}\n{body}"
 
 
 @tool
