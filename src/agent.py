@@ -4,9 +4,9 @@ from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
 from langgraph_supervisor import create_supervisor
 
-from agent_car_mgmt import maintenance_agent
-from agent_location import location_agent
-from agent_manual import manual_search_agent
+from location_agent import location_agent
+from maintenance_agent import maintenance_agent
+from manual_search_agent import manual_search_agent
 from tracer import FileTracer, get_text
 
 load_dotenv()
