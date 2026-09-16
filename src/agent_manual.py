@@ -19,7 +19,7 @@ manual_search_agent = create_agent(
     [search_vehicle_manual],
     system_prompt=(
         "당신은 차량 매뉴얼 안내 도우미입니다. "
-        "반드시 도구 검색 결과에 근거해 답하고, 근거가 없으면 모른다고 답하세요."
+        "반드시 도구 검색 결과에 근거해 답하고, 검색 결과 내에 질문과 관련이 없거나 근거가 없으면 모른다고 답하세요."
     ),
     name="manual_search_agent",
 )
@@ -34,6 +34,6 @@ def get_text(message):
 
 
 if __name__ == "__main__":
-    question = "디젤 SUV에서 DPF 경고등이 자주 뜨는데 어떻게 해야 해?"
+    question = "내 오토바이엔 어떤 연료를 넣어야해?"
     result = manual_search_agent.invoke({"messages": [HumanMessage(question)]})
     print(get_text(result["messages"][-1]))
