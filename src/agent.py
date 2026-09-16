@@ -47,20 +47,32 @@ tracer = FileTracer("trace.jsonl")
 
 if __name__ == "__main__":
     question = "12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘"
-    last_node = None
+    # supervisor는 다른 에이전트에게 위임하기 전에도 짧은 안내 텍스트를 함께 낼 수 있어(예: "먼저
+    # 정비이력을 조회하겠습니다"), 같은 메시지에 handoff 도구 호출(tool_calls)이 실렸는지 끝까지
+    # 모아본 뒤에만 출력한다. tool_calls가 없는 채로 메시지가 끝나면 그게 최종 답변이다.
+    buffer = ""
+    delegated = False
+    current_id = None
+
+    def _flush():
+        if buffer and not delegated:
+            print(buffer, end="", flush=True)
+
     for chunk, metadata in app.stream(
         {"messages": [HumanMessage(content=question)]},
         {"callbacks": [tracer], "recursion_limit": 25},
         stream_mode="messages",
     ):
-        if getattr(chunk, "type", None) != "ai":
-            continue  # 도구 호출 결과 등은 trace.jsonl에만 남기고 콘솔은 답변 텍스트만 스트리밍한다
-        text = get_text(chunk)
-        if not text:
+        # 서브 에이전트(maintenance_agent, manual_search_agent)의 응답과 도구 호출 결과는
+        # trace.jsonl에만 남기고, 콘솔에는 supervisor의 최종 답변만 스트리밍한다.
+        if metadata.get("langgraph_node") != "supervisor" or getattr(chunk, "type", None) != "ai":
             continue
-        node = metadata.get("langgraph_node")
-        if node != last_node:
-            print(f"\n[{node}] ", end="", flush=True)
-            last_node = node
-        print(text, end="", flush=True)
+        mid = getattr(chunk, "id", None)
+        if mid != current_id:
+            _flush()
+            buffer, delegated, current_id = "", False, mid
+        if getattr(chunk, "tool_calls", None):
+            delegated = True
+        buffer += get_text(chunk)
+    _flush()
     print()
