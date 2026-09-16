@@ -6,6 +6,8 @@ from datetime import date as _date
 from typing import Optional
 
 from langchain_core.tools import tool
+from sqlalchemy import Column, Integer, String, create_engine, func
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from retriever import get_retriever
 
@@ -27,6 +29,42 @@ def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str
 # ── 정비이력 관리 (SQLite) ────────────────────────────────────────────
 
 DB_PATH = "data/maintenance.db"
+SCHEMA_PATH = "data/schema.sql"
+SEED_PATH = "data/seed.json"
+
+# 시딩(DML)만 ORM으로 처리한다. 나머지 CRUD 도구는 기존대로 sqlite3를 직접 사용한다.
+Base = declarative_base()
+
+
+class _Vehicle(Base):
+    __tablename__ = "vehicles"
+    vehicle_no = Column(String, primary_key=True)
+    vehicle_type = Column(String, nullable=False)
+    registered_date = Column(String, nullable=False)
+
+
+class _MaintenanceRecord(Base):
+    __tablename__ = "maintenance_records"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vehicle_no = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    item = Column(String, nullable=False)
+    cost = Column(Integer)
+    next_due_date = Column(String)
+
+
+def _seed_if_empty() -> None:
+    """차량 마스터가 비어 있을 때만 data/seed.json의 샘플 데이터를 읽어 ORM으로 시딩한다."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    engine = create_engine(f"sqlite:///{DB_PATH}")
+    session = sessionmaker(bind=engine)()
+    if session.query(func.count(_Vehicle.vehicle_no)).scalar() == 0:
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            seed = json.load(f)
+        session.add_all(_Vehicle(**row) for row in seed["vehicles"])
+        session.add_all(_MaintenanceRecord(**row) for row in seed["maintenance_records"])
+        session.commit()
+    session.close()
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -38,43 +76,13 @@ def _get_connection() -> sqlite3.Connection:
 
 
 def _init_db() -> None:
-    """차량 마스터·정비이력 테이블이 없으면 만들고, 비어 있으면 샘플 데이터를 시딩한다."""
+    """data/schema.sql로 테이블을 만들고(DDL), 비어 있으면 data/seed.json을 ORM으로 시딩한다(DML)."""
     conn = _get_connection()
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS vehicles (
-            vehicle_no TEXT PRIMARY KEY,
-            vehicle_type TEXT NOT NULL,
-            registered_date TEXT NOT NULL
-        )"""
-    )
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS maintenance_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            vehicle_no TEXT NOT NULL REFERENCES vehicles(vehicle_no),
-            date TEXT NOT NULL,
-            item TEXT NOT NULL,
-            cost INTEGER,
-            next_due_date TEXT
-        )"""
-    )
-    if conn.execute("SELECT COUNT(*) FROM vehicles").fetchone()[0] == 0:
-        conn.executemany(
-            "INSERT INTO vehicles (vehicle_no, vehicle_type, registered_date) VALUES (?, ?, ?)",
-            [
-                ("12가3456", "sedan_1600", "2024-01-15"),
-                ("34나5678", "suv_2000d", "2024-03-01"),
-            ],
-        )
-        conn.executemany(
-            "INSERT INTO maintenance_records (vehicle_no, date, item, cost, next_due_date) VALUES (?, ?, ?, ?, ?)",
-            [
-                ("12가3456", "2024-06-10", "엔진오일 교체", 80000, "2024-12-10"),
-                ("12가3456", "2025-01-20", "타이어 위치 교환", 30000, "2025-07-20"),
-                ("34나5678", "2024-09-05", "요소수 보충", 20000, None),
-            ],
-        )
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        conn.executescript(f.read())
     conn.commit()
     conn.close()
+    _seed_if_empty()
 
 
 _init_db()

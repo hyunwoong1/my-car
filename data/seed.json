@@ -1,0 +1,11 @@
+{
+  "vehicles": [
+    {"vehicle_no": "12가3456", "vehicle_type": "sedan_1600", "registered_date": "2024-01-15"},
+    {"vehicle_no": "34나5678", "vehicle_type": "suv_2000d", "registered_date": "2024-03-01"}
+  ],
+  "maintenance_records": [
+    {"vehicle_no": "12가3456", "date": "2024-06-10", "item": "엔진오일 교체", "cost": 80000, "next_due_date": "2024-12-10"},
+    {"vehicle_no": "12가3456", "date": "2025-01-20", "item": "타이어 위치 교환", "cost": 30000, "next_due_date": "2025-07-20"},
+    {"vehicle_no": "34나5678", "date": "2024-09-05", "item": "요소수 보충", "cost": 20000, "next_due_date": null}
+  ]
+}
