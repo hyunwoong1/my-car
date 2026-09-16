@@ -32,7 +32,9 @@ SUPERVISOR_PROMPT = (
     "반드시 명시해서 전달하라(예: \"sedan_1600 차종의 타이어 점검 주기 알려줘\").\n"
     "- 한 질문에 여러 요구가 섞여 있으면 필요한 Agent를 순서대로 호출해 모두 처리한 뒤 하나의 답변으로 종합하라.\n"
     "- 정비·차량과 무관한 질문(잡담 등)은 어떤 Agent에게도 넘기지 말고, "
-    "\"차량 매뉴얼, 정비이력, 근처 정비소 관련 질문을 도와드릴 수 있습니다\"처럼 직접 안내하라."
+    "\"차량 매뉴얼, 정비이력, 근처 정비소 관련 질문을 도와드릴 수 있습니다\"처럼 직접 안내하라.\n"
+    "- Agent에게 위임할 때는 \"~하겠습니다\" 같은 안내 문구 없이 도구만 곧바로 호출하라. "
+    "사용자에게 보여줄 답변 텍스트는 필요한 Agent 호출이 모두 끝난 뒤 최종 답변에서만 작성하라."
 )
 
 supervisor = create_supervisor(
@@ -47,32 +49,24 @@ tracer = FileTracer("trace.jsonl")
 
 if __name__ == "__main__":
     question = "12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘"
-    # supervisor는 다른 에이전트에게 위임하기 전에도 짧은 안내 텍스트를 함께 낼 수 있어(예: "먼저
-    # 정비이력을 조회하겠습니다"), 같은 메시지에 handoff 도구 호출(tool_calls)이 실렸는지 끝까지
-    # 모아본 뒤에만 출력한다. tool_calls가 없는 채로 메시지가 끝나면 그게 최종 답변이다.
-    buffer = ""
-    delegated = False
-    current_id = None
-
-    def _flush():
-        if buffer and not delegated:
-            print(buffer, end="", flush=True)
-
-    for chunk, metadata in app.stream(
+    for namespace, (chunk, metadata) in app.stream(
         {"messages": [HumanMessage(content=question)]},
         {"callbacks": [tracer], "recursion_limit": 25},
         stream_mode="messages",
+        subgraphs=True,
     ):
-        # 서브 에이전트(maintenance_agent, manual_search_agent)의 응답과 도구 호출 결과는
-        # trace.jsonl에만 남기고, 콘솔에는 supervisor의 최종 답변만 스트리밍한다.
-        if metadata.get("langgraph_node") != "supervisor" or getattr(chunk, "type", None) != "ai":
+        # supervisor 자신도 create_react_agent로 만들어진 서브그래프라서, subgraphs=True로 그
+        # 내부(node="agent")까지 열어야 실제 토큰 단위 청크가 올라온다(안 그러면 서브그래프가
+        # 끝난 뒤 완성된 메시지 하나가 통째로 오는 것만 보여서 스트리밍처럼 보이지 않는다).
+        # 다른 서브 에이전트(maintenance_agent, manual_search_agent) 네임스페이스와 도구 호출
+        # 결과는 trace.jsonl에만 남기고, 콘솔에는 supervisor가 생성하는 답변 텍스트만 스트리밍한다.
+        root = namespace[0].split(":")[0] if namespace else None
+        if root != "supervisor" or metadata.get("langgraph_node") != "agent":
             continue
-        mid = getattr(chunk, "id", None)
-        if mid != current_id:
-            _flush()
-            buffer, delegated, current_id = "", False, mid
-        if getattr(chunk, "tool_calls", None):
-            delegated = True
-        buffer += get_text(chunk)
-    _flush()
+        # 스트리밍 청크는 type이 "ai"가 아니라 "AIMessageChunk"로 온다("ai"는 완성된 AIMessage용).
+        if getattr(chunk, "type", None) != "AIMessageChunk" or getattr(chunk, "tool_calls", None):
+            continue
+        text = get_text(chunk)
+        if text:
+            print(text, end="", flush=True)
     print()
