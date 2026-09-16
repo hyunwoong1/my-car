@@ -33,7 +33,7 @@
 
 ## 6. 구현 구조 (에이전트 기반 분류)
 - **Supervisor (src/agent.py)**: LangGraph 그래프의 진입점. 질문을 분류해 아래 3개 에이전트로 라우팅한다. 한 에이전트로 끝나는 질문은 단일 라우팅하고, "정비이력 보고 관련 매뉴얼도 같이 알려줘"처럼 여러 에이전트가 필요한 질문은 순차로 호출해 결과를 모아 답한다(Supervisor 패턴). 정비·차량과 무관한 질문은 어디로도 보내지 않고 고정 응답(Fallback)으로 직접 처리한다
-- **매뉴얼 검색 에이전트 (src/agent.py 노드 + src/retriever.py)**: `create_agent`로 생성. `src/retriever.py`의 검색 함수를 도구로 물려 매뉴얼 문서를 검색해 답한다. 매뉴얼 적재는 `data/manuals/`의 md 파일을 로드 → 파일(카테고리 단위)을 기본 청크로 삼고 필요할 때만 분할 → `vehicle_no`/`vehicle_type`/`category` 메타데이터를 붙여 Chroma에 저장(최초 1회). 질문에 차량번호·차종이 포함되면 해당 메타데이터로 필터링한 뒤 검색해 다른 차량·차종의 매뉴얼이 섞이지 않게 한다
+- **매뉴얼 검색 에이전트 (src/agent.py 노드 + src/retriever.py)**: `create_agent`로 생성. `src/retriever.py`의 검색 함수를 도구로 물려 매뉴얼 문서를 검색해 답한다. 매뉴얼 적재는 `data/manuals/`의 md 파일을 로드 → 프런트매터 제거 → `RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)`로 글자 수 기준(중복 포함) 분할(더미는 md지만 실제로는 PDF/HTML 등 비정형 문서가 들어올 수 있어 포맷에 의존하는 헤더 기반 분할 대신 채택) → 파일명에서 뽑은 `vehicle_type`과 `source`를 메타데이터로 붙여 Chroma에 저장(최초 1회, 이후 재사용). 질문에 차종이 포함되면 `vehicle_type` 메타데이터로 필터링한 뒤 검색해 다른 차종의 매뉴얼이 섞이지 않게 한다
 - **정비이력 관리 에이전트 (src/agent.py 노드 + src/tools.py)**: `create_agent`로 생성. `src/tools.py`의 도구로 `data/maintenance.db`(SQLite)의 차량 마스터 테이블(등록·목록 조회)과 정비이력 테이블(등록·조회·수정·삭제)을 관리한다
 - **정비소 조회 에이전트 (src/agent.py 노드 + src/tools.py)**: `create_agent`로 생성. `src/tools.py`의 `search_nearby_shops` 도구로 처리한다. 더미 JSON 조회로 우선 구현하고, 이후 네이버 지도 API(지역 검색) 호출로 교체할 수 있게 함수 시그니처만 유지한다
 - **구분 기준**: 문서 검색이 필요한 정적 지식은 매뉴얼 검색 에이전트로, 정비이력·정비소처럼 대상 데이터가 다른 구조화 조회·관리는 각각 별도 에이전트로 나눈다
