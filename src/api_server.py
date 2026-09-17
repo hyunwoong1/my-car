@@ -66,13 +66,19 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
     contexts/trace를 한 번에 보낸다(/query와 같은 세 가지 정보를 스트리밍용으로 나눠 보내는 것)."""
     def event_source() -> Iterator[str]:
         rec = RequestRecorder()
-        for text in stream_answer_tokens(
-            req.question,
-            thread_id=str(uuid.uuid4()),
-            user_id="default",
-            callbacks=[rec],
-        ):
-            yield _sse_event("token", {"text": text})
+        try:
+            for text in stream_answer_tokens(
+                req.question,
+                thread_id=str(uuid.uuid4()),
+                user_id="default",
+                callbacks=[rec],
+            ):
+                yield _sse_event("token", {"text": text})
+        except Exception as e:
+            # 그래프 실행 중 예외(예: Bedrock 한도 초과)가 나면 연결이 그냥 끊기지 않도록,
+            # event: error로 클라이언트에 알리고 스트림을 정상 종료한다.
+            yield _sse_event("error", {"message": str(e)})
+            return
         yield _sse_event("done", {
             "contexts": rec.contexts,
             "trace": rec.trace,
@@ -82,6 +88,6 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
 
 
 # 실행(mini-pjt 루트에서, src/ 모듈들이 flat import라 PYTHONPATH=src로 잡아줘야 한다):
-#   PowerShell: $env:PYTHONPATH = "src"; uvicorn api_server:api --port 8000
-# 테스트(일반): Invoke-RestMethod -Uri http://localhost:8000/query -Method Post -ContentType "application/json" -Body '{"question": "세단 타이어 공기압은 얼마나 자주 점검해야 해?"}'
+#   PYTHONPATH=src uvicorn api_server:api --port 8000
+# 테스트(일반): curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d '{"question": "세단 타이어 공기압은 얼마나 자주 점검해야 해?"}'
 # 테스트(스트리밍): curl -N -X POST http://localhost:8000/query/stream -H "Content-Type: application/json" -d '{"question": "세단 타이어 공기압은 얼마나 자주 점검해야 해?"}'
