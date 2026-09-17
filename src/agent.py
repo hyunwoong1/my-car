@@ -18,7 +18,7 @@ from tracer import FileTracer, get_text
 load_dotenv()
 
 supervisor_llm = ChatBedrockConverse(
-    model="us.anthropic.claude-sonnet-4-6",
+    model=os.environ.get("AGENT_MODEL") or "us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )

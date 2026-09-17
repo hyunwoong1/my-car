@@ -1,4 +1,6 @@
 """정비소 조회 에이전트 그래프: 범용 지역 검색 도구를 이용해 정비소를 찾는 단일 에이전트."""
+import os
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_aws import ChatBedrockConverse
@@ -9,7 +11,7 @@ from tools import search_local_places
 load_dotenv()
 
 llm = ChatBedrockConverse(
-    model="us.anthropic.claude-sonnet-4-6",
+    model=os.environ.get("AGENT_MODEL") or "us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )

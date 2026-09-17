@@ -6,6 +6,7 @@ RAGAS(ragas) 패키지는 공용 .venv에 설치돼 있지 않고, mini-pjt만�
 day7_practice/llm_judge.py와 같은 방식의 LLM 심사로 직접 계산한다.
 """
 import csv
+import os
 import time
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-JUDGE_MODEL = "us.anthropic.claude-sonnet-4-6"
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL") or "us.anthropic.claude-sonnet-4-6"
 judge_llm = ChatBedrockConverse(model=JUDGE_MODEL, region_name="us-east-1", temperature=0)
 
 

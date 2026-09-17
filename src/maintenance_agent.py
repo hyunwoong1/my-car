@@ -1,4 +1,6 @@
 """정비이력 관리 에이전트 그래프: SQLite 기반 차량·정비이력 CRUD 단일 에이전트."""
+import os
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_aws import ChatBedrockConverse
@@ -16,7 +18,7 @@ from tools import (
 load_dotenv()
 
 llm = ChatBedrockConverse(
-    model="us.anthropic.claude-sonnet-4-6",
+    model=os.environ.get("AGENT_MODEL") or "us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )

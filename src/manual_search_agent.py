@@ -1,4 +1,6 @@
 """메인 에이전트 그래프: 차량 매뉴얼 검색(RAG) 단일 에이전트."""
+import os
+
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_aws import ChatBedrockConverse
@@ -9,7 +11,7 @@ from tools import search_vehicle_manual
 load_dotenv()
 
 llm = ChatBedrockConverse(
-    model="us.anthropic.claude-sonnet-4-6",
+    model=os.environ.get("AGENT_MODEL") or "us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )
