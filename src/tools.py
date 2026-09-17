@@ -16,7 +16,6 @@ from retriever import get_retriever
 def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str:
     """차량 매뉴얼(경고등 의미, 점검 주기, 자가정비 가능 항목, 고장 증상별 원인, 안전수칙 등)에서 관련 내용을 검색한다.
     질문에 특정 차종이 언급되면 vehicle_type에 sedan_1600(세단) 또는 suv_2000d(SUV) 중 해당하는 값을 지정한다."""
-    print("매뉴얼 정보를 조회 중입니다...")
     retriever = get_retriever(vehicle_type=vehicle_type)
     docs = retriever.invoke(query)
     if not docs:
@@ -99,7 +98,6 @@ def _vehicle_exists(vehicle_no: str) -> bool:
 def register_vehicle(vehicle_no: str, vehicle_type: str) -> str:
     """차량을 등록한다. 차량번호와 차종(sedan_1600 또는 suv_2000d)을 입력받아 차량 마스터에 등록하며,
     이미 등록된 차량번호면 이미 등록되어 있다고 안내한다."""
-    print("차량을 등록 중입니다...")
     if _vehicle_exists(vehicle_no):
         return f"{vehicle_no} 차량은 이미 등록되어 있습니다."
     conn = _get_connection()
@@ -115,7 +113,6 @@ def register_vehicle(vehicle_no: str, vehicle_type: str) -> str:
 @tool
 def list_vehicles() -> str:
     """등록된 차량 목록(차량번호, 차종, 등록일)을 조회한다."""
-    print("등록된 차량 목록을 조회 중입니다...")
     conn = _get_connection()
     rows = conn.execute("SELECT vehicle_no, vehicle_type, registered_date FROM vehicles").fetchall()
     conn.close()
@@ -129,7 +126,6 @@ def get_maintenance_history(vehicle_no: str) -> str:
     """차량번호로 정비이력(날짜, 항목, 비용, 다음 점검 권장일)을 조회한다. 결과에 차종(vehicle_type)도
     함께 포함되므로, 이어서 매뉴얼을 검색할 때는 그 차종을 참고해야 한다.
     등록되지 않은 차량번호면 지어내지 말고 등록되지 않았다고 안내한다."""
-    print("정비 이력을 조회 중입니다...")
     conn = _get_connection()
     vehicle = conn.execute(
         "SELECT vehicle_type FROM vehicles WHERE vehicle_no = ?", (vehicle_no,)
@@ -162,7 +158,6 @@ def add_maintenance_record(
 ) -> str:
     """차량의 정비 내역을 새로 등록한다(날짜, 항목, 비용, 다음 점검 권장일).
     등록되지 않은 차량번호면 register_vehicle로 먼저 차량을 등록해야 한다고 안내한다."""
-    print("정비 이력을 등록 중입니다...")
     if not _vehicle_exists(vehicle_no):
         return f"{vehicle_no}는 등록되지 않은 차량입니다. register_vehicle로 차량을 먼저 등록해주세요."
     conn = _get_connection()
@@ -186,7 +181,6 @@ def update_maintenance_record(
 ) -> str:
     """정비이력(record_id)을 수정한다. 되돌리기 어려운 변경이므로 사용자에게 반드시 재확인을 받은 뒤
     confirm=True로 다시 호출해야 하며, confirm=False일 때는 절대 실행하지 않는다."""
-    print("정비 이력을 수정 중입니다...")
     if not confirm:
         return "이 변경은 되돌리기 어렵습니다. 사용자에게 다시 한 번 확인한 뒤 confirm=True로 요청해주세요."
     conn = _get_connection()
@@ -213,7 +207,6 @@ def update_maintenance_record(
 def delete_maintenance_record(record_id: int, confirm: bool = False) -> str:
     """정비이력(record_id)을 삭제한다. 되돌리기 어려운 변경이므로 사용자에게 반드시 재확인을 받은 뒤
     confirm=True로 다시 호출해야 하며, confirm=False일 때는 절대 실행하지 않는다."""
-    print("정비 이력을 삭제 중입니다...")
     if not confirm:
         return "이 삭제는 되돌릴 수 없습니다. 사용자에게 다시 한 번 확인한 뒤 confirm=True로 요청해주세요."
     conn = _get_connection()
@@ -262,7 +255,6 @@ def search_local_places(query: str, display: int = 5) -> str:
     """지역/업종 검색어로 장소 정보(이름, 카테고리, 주소, 전화번호 등)를 조회하는 지역 검색 도구다.
     이 도구는 정비소 전용이 아닌 범용 지역 검색이므로, 정비소를 찾으려면 검색어에 지역명과 함께
     '카센터' 또는 '자동차정비' 같은 업종 키워드를 반드시 함께 넣어야 한다."""
-    print("근처 정비소를 검색 중입니다...")
     results = _search_naver_local(query, display=display)
     if not results:
         return "검색 결과가 없습니다."
