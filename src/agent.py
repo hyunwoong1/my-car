@@ -3,7 +3,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 from langgraph_supervisor import create_supervisor
@@ -11,6 +11,7 @@ from langgraph_supervisor import create_supervisor
 from location_agent import location_agent
 from maintenance_agent import maintenance_agent
 from manual_search_agent import manual_search_agent
+from tools import get_registered_vehicle_types
 from tracer import FileTracer, get_text
 
 load_dotenv()
@@ -21,39 +22,77 @@ supervisor_llm = ChatBedrockConverse(
     temperature=0,
 )
 
-SUPERVISOR_PROMPT = (
-    "너는 개인 차량 관리 서비스의 작업 분배자(Supervisor)다.\n"
-    "\n"
-    "[배분 기준]\n"
-    "- 경고등 의미, 점검 주기, 자가정비 가능 항목, 고장 증상, 안전수칙 등 차량 매뉴얼 지식은 manual_search_agent\n"
-    "- 차량 등록·목록 조회, 정비이력 등록·조회·수정·삭제는 maintenance_agent\n"
-    "- 근처 정비소를 찾는 질문은 location_agent\n"
-    "\n"
-    "[규칙]\n"
-    "- 직접 답을 지어내지 말고 반드시 담당 Agent를 통해 확인하라.\n"
-    "- 차량번호만 언급되고 차종을 모르는 상태에서 매뉴얼 검색이 함께 필요하면, 먼저 maintenance_agent에게 "
-    "그 차량번호의 차종(vehicle_type)을 확인한 뒤, manual_search_agent에게 위임할 때 확인된 차종을 "
-    "반드시 명시해서 전달하라(예: \"sedan_1600 차종의 타이어 점검 주기 알려줘\").\n"
-    "- 한 질문에 여러 요구가 섞여 있으면 필요한 Agent를 순서대로 호출해 모두 처리한 뒤 하나의 답변으로 종합하라.\n"
-    "- 정비·차량과 무관한 질문(잡담 등)은 어떤 Agent에게도 넘기지 말고, "
-    "\"차량 매뉴얼, 정비이력, 근처 정비소 관련 질문을 도와드릴 수 있습니다\"처럼 직접 안내하라.\n"
-    "- Agent에게 위임할 때는 \"~하겠습니다\" 같은 안내 문구 없이 도구만 곧바로 호출하라. "
-    "사용자에게 보여줄 답변 텍스트는 필요한 Agent 호출이 모두 끝난 뒤 최종 답변에서만 작성하라.\n"
-    "- 더 이상 호출할 Agent가 없으면(모든 위임이 끝났으면) 절대 빈 답변으로 끝내지 마라. "
-    "Agent들이 알아낸 내용을 반드시 너 자신의 말로 요약·정리해 사용자에게 보여줄 최종 답변 텍스트를 "
-    "작성하라. Agent의 답변이 이미 충분해 보여도 그 내용을 반드시 최종 답변에 다시 담아라.\n"
-    "- 점검 주기, 교체 주기, km 수치처럼 차종마다 값이 다를 수 있는 매뉴얼 질문인데 차량번호도 차종도 "
-    "언급되지 않았다면, manual_search_agent에게 위임하기 전에 먼저 사용자에게 세단(sedan_1600)인지 "
-    "SUV(suv_2000d)인지 되물어라. 증상 설명, 안전수칙, 자가정비 방법처럼 차종에 관계없이 답이 같거나 "
-    "매뉴얼에 없는 차종(전기차 등)에 대한 질문은 되묻지 말고 바로 위임하라.\n"
-    "- 질문에 \"(참고: ... 차종은 ...)\" 같은 문구가 있으면 그건 사용자에 대해 이미 확인된 정보이니 "
-    "다시 묻지 말고 그 차종으로 간주해 바로 위임하라."
-)
+# 차종 코드가 보통 "몸체타입_모델번호"(예: sedan_1600) 형식이라, 앞부분(몸체타입)에 대한
+# 한국어 표현만 별도로 매핑한다. 모델 번호까지는 하드코딩하지 않으므로 새 차종이 등록돼도
+# (예: sedan_2200) "세단"이라는 표현으로 자동 인식된다.
+_BODY_TYPE_ALIASES = {"sedan": "세단", "suv": "SUV"}
+
+
+def _describe_vehicle_type(vehicle_type: str) -> str:
+    """프롬프트에 보여줄 차종 표기. 별칭이 있으면 "sedan_1600(세단)"처럼 한글 표현을 덧붙인다."""
+    prefix = vehicle_type.split("_")[0].lower()
+    alias = _BODY_TYPE_ALIASES.get(prefix)
+    return f"{vehicle_type}({alias})" if alias else vehicle_type
+
+
+def _build_supervisor_prompt_text() -> str:
+    """차량 마스터에 실제 등록된 차종 목록을 조회해 프롬프트에 주입한다. 특정 차종을 프롬프트에
+    직접 못박아두지 않으므로, 새 차종의 차량이 등록되면 다음 호출부터 바로 반영된다."""
+    types = get_registered_vehicle_types()
+    # "세단"/"SUV"처럼 사용자가 차종 코드 대신 흔히 쓰는 한글 표현을 프롬프트에 같이 보여줘야,
+    # 질문에 "세단 타이어..."처럼 코드 없이 차종이 이미 언급된 경우에도 Supervisor가 이를
+    # sedan_1600 같은 실제 코드와 같은 것으로 인식하고 다시 묻지 않는다.
+    types_desc = ", ".join(_describe_vehicle_type(t) for t in types) if types else "(현재 등록된 차량 없음)"
+    example_type = types[0] if types else "그 차종"
+
+    return (
+        "너는 개인 차량 관리 서비스의 작업 분배자(Supervisor)다.\n"
+        "\n"
+        "[배분 기준]\n"
+        "- 경고등 의미, 점검 주기, 자가정비 가능 항목, 고장 증상, 안전수칙 등 차량 매뉴얼 지식은 manual_search_agent\n"
+        "- 차량 등록·목록 조회, 정비이력 등록·조회·수정·삭제는 maintenance_agent\n"
+        "- 근처 정비소를 찾는 질문은 location_agent\n"
+        "\n"
+        "[규칙]\n"
+        "- 직접 답을 지어내지 말고 반드시 담당 Agent를 통해 확인하라.\n"
+        "- 차량번호만 언급되고 차종을 모르는 상태에서 매뉴얼 검색이 함께 필요하면, 먼저 maintenance_agent에게 "
+        "그 차량번호의 차종(vehicle_type)을 확인한 뒤, manual_search_agent에게 위임할 때 확인된 차종을 "
+        f"반드시 명시해서 전달하라(예: \"{example_type} 차종의 타이어 점검 주기 알려줘\").\n"
+        "- 한 질문에 여러 요구가 섞여 있으면 필요한 Agent를 순서대로 호출해 모두 처리한 뒤 하나의 답변으로 종합하라.\n"
+        "- 정비·차량과 무관한 질문(잡담 등)은 어떤 Agent에게도 넘기지 말고, "
+        "\"차량 매뉴얼, 정비이력, 근처 정비소 관련 질문을 도와드릴 수 있습니다\"처럼 직접 안내하라.\n"
+        "- Agent에게 위임할 때는 \"~하겠습니다\" 같은 안내 문구 없이 도구만 곧바로 호출하라. "
+        "사용자에게 보여줄 답변 텍스트는 필요한 Agent 호출이 모두 끝난 뒤 최종 답변에서만 작성하라.\n"
+        "- 더 이상 호출할 Agent가 없으면(모든 위임이 끝났으면) 절대 빈 답변으로 끝내지 마라. "
+        "Agent들이 알아낸 내용을 반드시 너 자신의 말로 요약·정리해 사용자에게 보여줄 최종 답변 텍스트를 "
+        "작성하라. Agent의 답변이 이미 충분해 보여도 그 내용을 반드시 최종 답변에 다시 담아라.\n"
+        "- 점검 주기, 교체 주기, km 수치처럼 차종마다 값이 다를 수 있는 매뉴얼 질문인데 차량번호도 차종도 "
+        f"언급되지 않았다면, manual_search_agent에게 위임하기 전에 먼저 사용자에게 현재 등록된 차종({types_desc}) "
+        "중 어느 것인지 되물어라. 증상 설명, 안전수칙, 자가정비 방법처럼 차종에 관계없이 답이 같거나 "
+        "매뉴얼에 없는 차종(전기차 등)에 대한 질문은 되묻지 말고 바로 위임하라.\n"
+        "- 질문에 \"(참고: ... 차종은 ...)\" 같은 문구가 있으면 그건 사용자에 대해 이미 확인된 정보이니 "
+        "다시 묻지 말고 그 차종으로 간주해 바로 위임하라.\n"
+        "- 이미 다른 Agent의 응답(예: maintenance_agent가 알려준 차종)에 필요한 정보가 나와 있다면, 그걸 "
+        "사용자에게 다시 확인하거나 다른 Agent가 그 정보를 모른다고 해서 포기하지 마라. 다음 Agent에게 "
+        f"위임할 때 반드시 그 정보를 구체적인 요청 문장에 직접 포함시켜라(예: \"{example_type} 차종의 엔진오일 "
+        "교체 주기 알려줘\"). 위임 메시지가 막연하면 해당 Agent가 이해하지 못할 수 있다.\n"
+        "- 어떤 Agent가 정보 부족을 이유로 되묻는 답을 돌려주더라도, 그 되묻는 문장을 그대로 최종 답변에 "
+        "옮겨 사용자에게 넘기지 마라. 되묻는 이유가 된 정보(차종, 항목명 등)를 네가 이미 알고 있다면 "
+        "(다른 Agent의 이전 응답에 나와 있다면) 사용자에게 묻지 말고 그 정보를 채워 즉시 같은 Agent에게 "
+        "다시 위임하라. 정말로 너도 그 정보를 모를 때만 사용자에게 되물어라."
+    )
+
+
+def _supervisor_prompt(state):
+    """create_supervisor의 prompt로 넘기는 콜러블. 호출될 때마다 차량 마스터를 다시 조회하므로,
+    대화 중간에 새 차량이 등록돼도 다음 턴부터 바로 최신 차종 목록이 반영된다."""
+    return [SystemMessage(content=_build_supervisor_prompt_text())] + state["messages"]
+
 
 supervisor = create_supervisor(
     [manual_search_agent, maintenance_agent, location_agent],
     model=supervisor_llm,
-    prompt=SUPERVISOR_PROMPT,
+    prompt=_supervisor_prompt,
 )
 
 checkpointer = InMemorySaver()  # 단기 기억: 같은 thread_id 안에서 대화 흐름(되물음 -> 답변)을 이어간다
@@ -62,15 +101,16 @@ app = supervisor.compile(checkpointer=checkpointer, store=store)
 
 tracer = FileTracer("trace.jsonl")
 
-VEHICLE_TYPES = ("sedan_1600", "suv_2000d")
-
 
 def _detect_vehicle_type(text: str) -> Optional[str]:
-    """사용자 발화에서 차종을 감지한다(되물음에 대한 답, "세단이야" 같은 응답에서 쓴다)."""
-    if "sedan_1600" in text or "세단" in text:
-        return "sedan_1600"
-    if "suv_2000d" in text or "suv" in text.lower():
-        return "suv_2000d"
+    """사용자 발화에서 차종을 감지한다(되물음에 대한 답, "세단이야" 같은 응답에서 쓴다).
+    차량 마스터에 실제 등록된 차종만 대상으로 하므로, 새 차종이 등록되면 자동으로 인식 대상이 된다."""
+    lowered = text.lower()
+    for vehicle_type in get_registered_vehicle_types():
+        prefix = vehicle_type.split("_")[0].lower()
+        alias = _BODY_TYPE_ALIASES.get(prefix, prefix).lower()
+        if vehicle_type.lower() in lowered or prefix in lowered or alias in lowered:
+            return vehicle_type
     return None
 
 

@@ -8,13 +8,13 @@ from langchain_core.tools import tool
 from sqlalchemy import Column, Integer, String, create_engine, func
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from retriever import get_retriever
+from retriever import get_retriever, get_supported_vehicle_types
 
 
 @tool
 def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str:
     """차량 매뉴얼(경고등 의미, 점검 주기, 자가정비 가능 항목, 고장 증상별 원인, 안전수칙 등)에서 관련 내용을 검색한다.
-    질문에 특정 차종이 언급되면 vehicle_type에 sedan_1600(세단) 또는 suv_2000d(SUV) 중 해당하는 값을 지정한다."""
+    질문에 특정 차종이 언급되면 vehicle_type에 매뉴얼이 있는 차종 코드 중 해당하는 값을 지정한다."""
     retriever = get_retriever(vehicle_type=vehicle_type)
     docs = retriever.invoke(query)
     if not docs:
@@ -25,9 +25,13 @@ def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str
     )
 
 
+# 매뉴얼 파일 목록에서 뽑은 차종 코드를 도구 설명에 덧붙인다(새 매뉴얼 파일을 추가하면 자동 반영).
+search_vehicle_manual.description += f" 현재 매뉴얼이 있는 차종 코드: {', '.join(get_supported_vehicle_types())}."
+
+
 # ── 정비이력 관리 (SQLite) ────────────────────────────────────────────
 
-DB_PATH = "data/maintenance.db"
+DB_PATH = os.environ.get("MAINTENANCE_DB_PATH", "data/maintenance.db")
 SEED_PATH = "data/seed.json"
 
 # 스키마 정의부터 CRUD 도구까지 전부 SQLAlchemy ORM으로 처리한다(단일 소스, 원시 SQL 없음).
@@ -90,10 +94,20 @@ def _vehicle_exists(vehicle_no: str) -> bool:
     return exists
 
 
+def get_registered_vehicle_types() -> list[str]:
+    """차량 마스터에 현재 등록된 차종(중복 제거) 목록을 조회한다. LLM 도구가 아니라 Supervisor가
+    시스템 프롬프트를 만들 때 쓰는 내부 헬퍼라, 새 차량이 등록되면 다음 호출부터 바로 반영된다."""
+    session = _get_session()
+    types = [row[0] for row in session.query(_Vehicle.vehicle_type).distinct().all()]
+    session.close()
+    return sorted(types)
+
+
 @tool
 def register_vehicle(vehicle_no: str, vehicle_type: str) -> str:
-    """차량을 등록한다. 차량번호와 차종(sedan_1600 또는 suv_2000d)을 입력받아 차량 마스터에 등록하며,
-    이미 등록된 차량번호면 이미 등록되어 있다고 안내한다."""
+    """차량을 등록한다. 차량번호와 차종(vehicle_type)을 입력받아 차량 마스터에 등록하며,
+    이미 등록된 차량번호면 이미 등록되어 있다고 안내한다. 차종은 자유 문자열이라 매뉴얼이 없는 새 차종도
+    등록할 수 있다(다만 매뉴얼 검색은 search_vehicle_manual이 다루는 차종 코드에서만 가능하다)."""
     if _vehicle_exists(vehicle_no):
         return f"{vehicle_no} 차량은 이미 등록되어 있습니다."
     session = _get_session()
