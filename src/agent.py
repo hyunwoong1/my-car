@@ -114,6 +114,38 @@ def _detect_vehicle_type(text: str) -> Optional[str]:
     return None
 
 
+def stream_answer_tokens(content: str, thread_id: str, user_id: str, callbacks: Optional[list] = None):
+    """Supervisor 그래프를 실행하며 최종 답변 텍스트 조각을 순서대로 yield한다.
+    콘솔 데모(run())와 API의 스트리밍 엔드포인트가 이 제너레이터를 함께 쓴다."""
+    config = {
+        "configurable": {"thread_id": thread_id, "user_id": user_id},
+        "recursion_limit": 25,
+    }
+    if callbacks:
+        config["callbacks"] = callbacks
+
+    for namespace, (chunk, metadata) in app.stream(
+        {"messages": [HumanMessage(content=content)]},
+        config,
+        stream_mode="messages",
+        subgraphs=True,
+    ):
+        # supervisor 자신도 create_react_agent로 만들어진 서브그래프라서, subgraphs=True로 그
+        # 내부(node="agent")까지 열어야 실제 토큰 단위 청크가 올라온다(안 그러면 서브그래프가
+        # 끝난 뒤 완성된 메시지 하나가 통째로 오는 것만 보여서 스트리밍처럼 보이지 않는다).
+        # 다른 서브 에이전트(maintenance_agent, manual_search_agent) 네임스페이스와 도구 호출
+        # 결과는 콘솔/응답 스트림에 안 보여주고 callbacks(트레이서 등)에만 남긴다.
+        root = namespace[0].split(":")[0] if namespace else None
+        if root != "supervisor" or metadata.get("langgraph_node") != "agent":
+            continue
+        # 스트리밍 청크는 type이 "ai"가 아니라 "AIMessageChunk"로 온다("ai"는 완성된 AIMessage용).
+        if getattr(chunk, "type", None) != "AIMessageChunk" or getattr(chunk, "tool_calls", None):
+            continue
+        text = get_text(chunk)
+        if text:
+            yield text
+
+
 def run(question: str, thread_id: str = "default", user_id: str = "me") -> None:
     """질문 하나를 Supervisor 그래프에 흘려보내며 supervisor의 최종 답변만 스트리밍한다.
     같은 thread_id로 다시 부르면 checkpointer 덕분에 이전 대화(되물음 등)를 이어받고,
@@ -124,30 +156,8 @@ def run(question: str, thread_id: str = "default", user_id: str = "me") -> None:
         content = f"{question}\n(참고: 이 사용자가 이전에 확인한 차종은 {remembered.value['vehicle_type']}입니다.)"
 
     print(f"질문: {question}")
-    for namespace, (chunk, metadata) in app.stream(
-        {"messages": [HumanMessage(content=content)]},
-        {
-            "configurable": {"thread_id": thread_id, "user_id": user_id},
-            "callbacks": [tracer],
-            "recursion_limit": 25,
-        },
-        stream_mode="messages",
-        subgraphs=True,
-    ):
-        # supervisor 자신도 create_react_agent로 만들어진 서브그래프라서, subgraphs=True로 그
-        # 내부(node="agent")까지 열어야 실제 토큰 단위 청크가 올라온다(안 그러면 서브그래프가
-        # 끝난 뒤 완성된 메시지 하나가 통째로 오는 것만 보여서 스트리밍처럼 보이지 않는다).
-        # 다른 서브 에이전트(maintenance_agent, manual_search_agent) 네임스페이스와 도구 호출
-        # 결과는 trace.jsonl에만 남기고, 콘솔에는 supervisor가 생성하는 답변 텍스트만 스트리밍한다.
-        root = namespace[0].split(":")[0] if namespace else None
-        if root != "supervisor" or metadata.get("langgraph_node") != "agent":
-            continue
-        # 스트리밍 청크는 type이 "ai"가 아니라 "AIMessageChunk"로 온다("ai"는 완성된 AIMessage용).
-        if getattr(chunk, "type", None) != "AIMessageChunk" or getattr(chunk, "tool_calls", None):
-            continue
-        text = get_text(chunk)
-        if text:
-            print(text, end="", flush=True)
+    for text in stream_answer_tokens(content, thread_id, user_id, callbacks=[tracer]):
+        print(text, end="", flush=True)
     print()
 
     detected = _detect_vehicle_type(question)

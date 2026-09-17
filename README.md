@@ -123,6 +123,32 @@ curl -X POST http://localhost:8000/query \
 }
 ```
 
+### 스트리밍 (`POST /query/stream`)
+
+같은 입력을 받아 답변을 토큰 단위로 실시간 스트리밍하고 싶은 클라이언트를 위한 SSE
+(`text/event-stream`) 엔드포인트. 답변이 생성되는 대로 `event: token`을 여러 번 보내고, 끝나면
+`event: done`으로 `/query`와 같은 `contexts`/`trace`를 한 번에 보낸다.
+
+```bash
+# curl (-N: 버퍼링 없이 바로바로 출력)
+curl -N -X POST http://localhost:8000/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
+```
+
+```
+event: token
+data: {"text": "**12가3456** 차"}
+
+event: token
+data: {"text": "량의 마지막 정비 내역은..."}
+
+...
+
+event: done
+data: {"contexts": ["차종: sedan_1600\n[6] 2025-07-15 - 엔진오일 교체 ..."], "trace": [{"type": "agent", "name": "maintenance_agent"}, {"type": "tool", "name": "get_maintenance_history", "args": "{'vehicle_no': '12가3456'}"}]}
+```
+
 ## 가드레일
 
 - 매뉴얼/정비이력/정비소 조회 결과가 없으면 지어내지 않고 "확인 안 되는 정보"로 안내
