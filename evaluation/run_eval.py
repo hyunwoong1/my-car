@@ -9,15 +9,26 @@
 data/maintenance.db는 건드리지 않음). 매 실행 전 이 테스트 DB 파일을 지우고
 data/seed.json 기준으로 다시 시딩해, q03(등록) 케이스가 반복 실행 때마다
 데이터를 누적시켜 q04/q08 같은 다른 케이스를 오염시키는 문제를 막는다.
+
+Supervisor의 단기/장기 기억(체크포인트·스토어)도 이제 SQLite 파일로 영속화되므로, 같은 이유로
+evaluation/checkpoints_test.sqlite · evaluation/store_test.sqlite라는 별도 테스트 파일을 쓰고
+매 실행 전 지운다. 그렇지 않으면 케이스마다 고정된 thread_id/user_id(f"eval-{id}")에 이전
+라운드의 대화 기록·기억한 차종이 남아, q09처럼 "차종이 불명확하면 되묻는지"를 확인하는 케이스가
+과거 실행 때 기억해둔 차종 때문에 더 이상 되묻지 않는 식으로 오염될 수 있다.
 """
 import json
 import os
 import sys
 
 TEST_DB_PATH = "evaluation/maintenance_test.db"
-if os.path.exists(TEST_DB_PATH):
-    os.remove(TEST_DB_PATH)
+TEST_CHECKPOINT_PATH = "evaluation/checkpoints_test.sqlite"
+TEST_STORE_PATH = "evaluation/store_test.sqlite"
+for path in (TEST_DB_PATH, TEST_CHECKPOINT_PATH, TEST_STORE_PATH):
+    if os.path.exists(path):
+        os.remove(path)
 os.environ["MAINTENANCE_DB_PATH"] = TEST_DB_PATH
+os.environ["CHECKPOINT_DB_PATH"] = TEST_CHECKPOINT_PATH
+os.environ["STORE_DB_PATH"] = TEST_STORE_PATH
 
 sys.path.insert(0, "src")
 sys.path.insert(0, "evaluation")

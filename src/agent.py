@@ -1,11 +1,13 @@
 """Supervisor 에이전트 그래프: 매뉴얼 검색·정비이력 관리·정비소 조회 3개 에이전트를 통합한다."""
+import os
+from contextlib import ExitStack
 from typing import Optional
 
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.store.memory import InMemoryStore
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.store.sqlite import SqliteStore
 from langgraph_supervisor import create_supervisor
 
 from location_agent import location_agent
@@ -95,8 +97,18 @@ supervisor = create_supervisor(
     prompt=_supervisor_prompt,
 )
 
-checkpointer = InMemorySaver()  # 단기 기억: 같은 thread_id 안에서 대화 흐름(되물음 -> 답변)을 이어간다
-store = InMemoryStore()  # 장기 기억: user_id별로 마지막에 확인된 차종을 기억해 다음에 재사용한다
+# 단기/장기 기억을 SQLite 파일로 영속화한다(프로세스를 껐다 켜도 대화·기억이 유지됨).
+# 경로는 환경변수로 오버라이드 가능 — evaluation/run_eval.py가 평가 전용 파일로 바꿔치기해서
+# 반복 실행 때마다 운영 데이터(data/checkpoints.sqlite 등)를 건드리지 않고 깨끗하게 리셋한다.
+CHECKPOINT_DB_PATH = os.environ.get("CHECKPOINT_DB_PATH", "data/checkpoints.sqlite")
+STORE_DB_PATH = os.environ.get("STORE_DB_PATH", "data/store.sqlite")
+
+# SqliteSaver/SqliteStore는 컨텍스트 매니저(with 블록 전용)라서, 모듈 전체 수명 동안 열어두려면
+# ExitStack으로 __enter__만 하고 명시적으로 닫지 않는다(프로세스 종료 시 정리됨).
+_sqlite_stack = ExitStack()
+checkpointer = _sqlite_stack.enter_context(SqliteSaver.from_conn_string(CHECKPOINT_DB_PATH))  # 단기 기억
+store = _sqlite_stack.enter_context(SqliteStore.from_conn_string(STORE_DB_PATH))  # 장기 기억
+store.setup()  # SqliteSaver와 달리 SqliteStore는 최초 1회 setup()을 직접 호출해야 한다
 app = supervisor.compile(checkpointer=checkpointer, store=store)
 
 tracer = FileTracer("trace.jsonl")

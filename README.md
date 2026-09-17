@@ -75,30 +75,14 @@ python evaluation/run_eval.py
 `src/` 모듈들이 flat import라 `PYTHONPATH`를 `src`로 잡아준 뒤 `mini-pjt` 루트에서 uvicorn으로
 띄운다.
 
-```powershell
-# PowerShell
-cd mini-pjt
-$env:PYTHONPATH = "src"
-uvicorn api_server:api --port 8000
-```
-
 ```bash
-# bash
 cd mini-pjt
 PYTHONPATH=src uvicorn api_server:api --port 8000
 ```
 
 ### 요청 예시
 
-```powershell
-# PowerShell
-Invoke-RestMethod -Uri http://localhost:8000/query -Method Post `
-  -ContentType "application/json" `
-  -Body '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
-```
-
 ```bash
-# curl
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
@@ -127,7 +111,8 @@ curl -X POST http://localhost:8000/query \
 
 같은 입력을 받아 답변을 토큰 단위로 실시간 스트리밍하고 싶은 클라이언트를 위한 SSE
 (`text/event-stream`) 엔드포인트. 답변이 생성되는 대로 `event: token`을 여러 번 보내고, 끝나면
-`event: done`으로 `/query`와 같은 `contexts`/`trace`를 한 번에 보낸다.
+`event: done`으로 `/query`와 같은 `contexts`/`trace`를 한 번에 보낸다. 그래프 실행 중 예외(예:
+Bedrock 한도 초과)가 나면 연결이 그냥 끊기는 대신 `event: error`로 알려준다.
 
 ```bash
 # curl (-N: 버퍼링 없이 바로바로 출력)
@@ -149,6 +134,13 @@ event: done
 data: {"contexts": ["차종: sedan_1600\n[6] 2025-07-15 - 엔진오일 교체 ..."], "trace": [{"type": "agent", "name": "maintenance_agent"}, {"type": "tool", "name": "get_maintenance_history", "args": "{'vehicle_no': '12가3456'}"}]}
 ```
 
+그래프 실행 중 예외가 나면 `event: done` 대신 아래처럼 온다:
+
+```
+event: error
+data: {"message": "An error occurred (ThrottlingException) when calling the ConverseStream operation..."}
+```
+
 ## 가드레일
 
 - 매뉴얼/정비이력/정비소 조회 결과가 없으면 지어내지 않고 "확인 안 되는 정보"로 안내
@@ -161,8 +153,13 @@ data: {"contexts": ["차종: sedan_1600\n[6] 2025-07-15 - 엔진오일 교체 ..
 
 ## 메모리
 
-- **단기 기억**: `InMemorySaver`(checkpointer) — 같은 `thread_id` 안에서 되물음 → 답변 흐름을 이어받음
-- **장기 기억**: `InMemoryStore` — `user_id`별로 마지막에 확인된 차종을 저장해 이후 대화에서도 재사용
+SQLite 파일로 영속화되어 있어 프로세스를 껐다 켜도 대화·기억이 남는다(운영: `data/checkpoints.sqlite`,
+`data/store.sqlite` — 경로는 `CHECKPOINT_DB_PATH`/`STORE_DB_PATH` 환경변수로 바꿀 수 있고,
+`evaluation/run_eval.py`는 평가 전용 파일을 매 실행 전 초기화해서 씀).
+
+- **단기 기억**: `SqliteSaver`(checkpointer) — 같은 `thread_id` 안에서 되물음 → 답변 흐름을 이어받음
+- **장기 기억**: `SqliteStore` — `user_id`별로 마지막에 확인된 차종을 저장해 이후 대화에서도(프로세스를
+  재시작해도) 재사용
 
 ## 평가
 
