@@ -9,7 +9,7 @@ from tools import search_local_places
 load_dotenv()
 
 llm = ChatBedrockConverse(
-    model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    model="us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )

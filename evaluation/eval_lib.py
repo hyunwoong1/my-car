@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-JUDGE_MODEL = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+JUDGE_MODEL = "us.anthropic.claude-sonnet-4-6"
 judge_llm = ChatBedrockConverse(model=JUDGE_MODEL, region_name="us-east-1", temperature=0)
 
 
@@ -126,7 +126,11 @@ def run_case(app, row: dict) -> dict:
     rec = ToolRecorder()
     result = app.invoke(
         {"messages": [HumanMessage(content=row["input"])]},
-        {"callbacks": [rec], "recursion_limit": 25},
+        {
+            "configurable": {"thread_id": f"eval-{row['id']}", "user_id": f"eval-{row['id']}"},
+            "callbacks": [rec],
+            "recursion_limit": 25,
+        },
     )
     answer = get_text(result["messages"][-1])
     verdict = judge_case(row["input"], answer, rec.tools, rec.contexts, row["expected_traits"], row["forbidden"])

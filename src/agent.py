@@ -1,7 +1,11 @@
 """Supervisor 에이전트 그래프: 매뉴얼 검색·정비이력 관리·정비소 조회 3개 에이전트를 통합한다."""
+from typing import Optional
+
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.store.memory import InMemoryStore
 from langgraph_supervisor import create_supervisor
 
 from location_agent import location_agent
@@ -12,7 +16,7 @@ from tracer import FileTracer, get_text
 load_dotenv()
 
 supervisor_llm = ChatBedrockConverse(
-    model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    model="us.anthropic.claude-sonnet-4-6",
     region_name="us-east-1",
     temperature=0,
 )
@@ -37,7 +41,13 @@ SUPERVISOR_PROMPT = (
     "사용자에게 보여줄 답변 텍스트는 필요한 Agent 호출이 모두 끝난 뒤 최종 답변에서만 작성하라.\n"
     "- 더 이상 호출할 Agent가 없으면(모든 위임이 끝났으면) 절대 빈 답변으로 끝내지 마라. "
     "Agent들이 알아낸 내용을 반드시 너 자신의 말로 요약·정리해 사용자에게 보여줄 최종 답변 텍스트를 "
-    "작성하라. Agent의 답변이 이미 충분해 보여도 그 내용을 반드시 최종 답변에 다시 담아라."
+    "작성하라. Agent의 답변이 이미 충분해 보여도 그 내용을 반드시 최종 답변에 다시 담아라.\n"
+    "- 점검 주기, 교체 주기, km 수치처럼 차종마다 값이 다를 수 있는 매뉴얼 질문인데 차량번호도 차종도 "
+    "언급되지 않았다면, manual_search_agent에게 위임하기 전에 먼저 사용자에게 세단(sedan_1600)인지 "
+    "SUV(suv_2000d)인지 되물어라. 증상 설명, 안전수칙, 자가정비 방법처럼 차종에 관계없이 답이 같거나 "
+    "매뉴얼에 없는 차종(전기차 등)에 대한 질문은 되묻지 말고 바로 위임하라.\n"
+    "- 질문에 \"(참고: ... 차종은 ...)\" 같은 문구가 있으면 그건 사용자에 대해 이미 확인된 정보이니 "
+    "다시 묻지 말고 그 차종으로 간주해 바로 위임하라."
 )
 
 supervisor = create_supervisor(
@@ -45,16 +55,42 @@ supervisor = create_supervisor(
     model=supervisor_llm,
     prompt=SUPERVISOR_PROMPT,
 )
-app = supervisor.compile()
+
+checkpointer = InMemorySaver()  # 단기 기억: 같은 thread_id 안에서 대화 흐름(되물음 -> 답변)을 이어간다
+store = InMemoryStore()  # 장기 기억: user_id별로 마지막에 확인된 차종을 기억해 다음에 재사용한다
+app = supervisor.compile(checkpointer=checkpointer, store=store)
 
 tracer = FileTracer("trace.jsonl")
 
+VEHICLE_TYPES = ("sedan_1600", "suv_2000d")
 
-if __name__ == "__main__":
-    question = "12가3456 정비이력 보고 관련 매뉴얼도 같이 알려줘"
+
+def _detect_vehicle_type(text: str) -> Optional[str]:
+    """사용자 발화에서 차종을 감지한다(되물음에 대한 답, "세단이야" 같은 응답에서 쓴다)."""
+    if "sedan_1600" in text or "세단" in text:
+        return "sedan_1600"
+    if "suv_2000d" in text or "suv" in text.lower():
+        return "suv_2000d"
+    return None
+
+
+def run(question: str, thread_id: str = "default", user_id: str = "me") -> None:
+    """질문 하나를 Supervisor 그래프에 흘려보내며 supervisor의 최종 답변만 스트리밍한다.
+    같은 thread_id로 다시 부르면 checkpointer 덕분에 이전 대화(되물음 등)를 이어받고,
+    user_id별로 store에 남은 "마지막으로 확인된 차종"이 있으면 질문에 참고 문구로 덧붙인다."""
+    remembered = store.get(("users", user_id), "vehicle_type")
+    content = question
+    if remembered and not _detect_vehicle_type(question):
+        content = f"{question}\n(참고: 이 사용자가 이전에 확인한 차종은 {remembered.value['vehicle_type']}입니다.)"
+
+    print(f"질문: {question}")
     for namespace, (chunk, metadata) in app.stream(
-        {"messages": [HumanMessage(content=question)]},
-        {"callbacks": [tracer], "recursion_limit": 25},
+        {"messages": [HumanMessage(content=content)]},
+        {
+            "configurable": {"thread_id": thread_id, "user_id": user_id},
+            "callbacks": [tracer],
+            "recursion_limit": 25,
+        },
         stream_mode="messages",
         subgraphs=True,
     ):
@@ -73,3 +109,15 @@ if __name__ == "__main__":
         if text:
             print(text, end="", flush=True)
     print()
+
+    detected = _detect_vehicle_type(question)
+    if detected:
+        store.put(("users", user_id), "vehicle_type", {"vehicle_type": detected})
+
+
+if __name__ == "__main__":
+    # 1턴: 차종을 안 밝혀 supervisor가 되물어야 하는 질문
+    run("타이어 공기압은 얼마나 자주 점검해야 해?", thread_id="demo")
+    # 2턴: 같은 thread_id로 이어서 답하면(단기 기억) 되물음에 대한 답으로 이해하고,
+    # 이 차종은 store에 남아(장기 기억) 이후 다른 대화에서도 참고된다.
+    run("세단이야", thread_id="demo")
