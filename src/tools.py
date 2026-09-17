@@ -1,13 +1,12 @@
 """도메인 도구 정의."""
 import json
 import os
-import sqlite3
 from datetime import date as _date
 from typing import Optional
 
 from langchain_core.tools import tool
 from sqlalchemy import Column, Integer, String, create_engine, func
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from retriever import get_retriever
 
@@ -31,7 +30,7 @@ def search_vehicle_manual(query: str, vehicle_type: Optional[str] = None) -> str
 DB_PATH = "data/maintenance.db"
 SEED_PATH = "data/seed.json"
 
-# 테이블 스키마는 ORM 모델로만 정의하고(단일 소스), 나머지 CRUD 도구는 기존대로 sqlite3를 직접 사용한다.
+# 스키마 정의부터 CRUD 도구까지 전부 SQLAlchemy ORM으로 처리한다(단일 소스, 원시 SQL 없음).
 Base = declarative_base()
 
 
@@ -68,12 +67,9 @@ def _seed_if_empty() -> None:
     session.close()
 
 
-def _get_connection() -> sqlite3.Connection:
-    """정비이력 SQLite DB 커넥션을 반환한다."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _get_session() -> Session:
+    """정비이력 DB에 대한 ORM 세션을 반환한다."""
+    return _Session()
 
 
 def _init_db() -> None:
@@ -88,10 +84,10 @@ _init_db()
 
 def _vehicle_exists(vehicle_no: str) -> bool:
     """차량 마스터에 해당 차량번호가 등록되어 있는지 확인한다."""
-    conn = _get_connection()
-    row = conn.execute("SELECT 1 FROM vehicles WHERE vehicle_no = ?", (vehicle_no,)).fetchone()
-    conn.close()
-    return row is not None
+    session = _get_session()
+    exists = session.query(_Vehicle).filter_by(vehicle_no=vehicle_no).first() is not None
+    session.close()
+    return exists
 
 
 @tool
@@ -100,25 +96,28 @@ def register_vehicle(vehicle_no: str, vehicle_type: str) -> str:
     이미 등록된 차량번호면 이미 등록되어 있다고 안내한다."""
     if _vehicle_exists(vehicle_no):
         return f"{vehicle_no} 차량은 이미 등록되어 있습니다."
-    conn = _get_connection()
-    conn.execute(
-        "INSERT INTO vehicles (vehicle_no, vehicle_type, registered_date) VALUES (?, ?, ?)",
-        (vehicle_no, vehicle_type, _date.today().isoformat()),
+    session = _get_session()
+    session.add(
+        _Vehicle(
+            vehicle_no=vehicle_no,
+            vehicle_type=vehicle_type,
+            registered_date=_date.today().isoformat(),
+        )
     )
-    conn.commit()
-    conn.close()
+    session.commit()
+    session.close()
     return f"{vehicle_no}({vehicle_type}) 차량을 등록했습니다."
 
 
 @tool
 def list_vehicles() -> str:
     """등록된 차량 목록(차량번호, 차종, 등록일)을 조회한다."""
-    conn = _get_connection()
-    rows = conn.execute("SELECT vehicle_no, vehicle_type, registered_date FROM vehicles").fetchall()
-    conn.close()
+    session = _get_session()
+    rows = session.query(_Vehicle).all()
+    session.close()
     if not rows:
         return "등록된 차량이 없습니다."
-    return "\n".join(f"{r['vehicle_no']} / {r['vehicle_type']} / 등록일: {r['registered_date']}" for r in rows)
+    return "\n".join(f"{r.vehicle_no} / {r.vehicle_type} / 등록일: {r.registered_date}" for r in rows)
 
 
 @tool
@@ -126,25 +125,26 @@ def get_maintenance_history(vehicle_no: str) -> str:
     """차량번호로 정비이력(날짜, 항목, 비용, 다음 점검 권장일)을 조회한다. 결과에 차종(vehicle_type)도
     함께 포함되므로, 이어서 매뉴얼을 검색할 때는 그 차종을 참고해야 한다.
     등록되지 않은 차량번호면 지어내지 말고 등록되지 않았다고 안내한다."""
-    conn = _get_connection()
-    vehicle = conn.execute(
-        "SELECT vehicle_type FROM vehicles WHERE vehicle_no = ?", (vehicle_no,)
-    ).fetchone()
+    session = _get_session()
+    vehicle = session.query(_Vehicle).filter_by(vehicle_no=vehicle_no).first()
     if vehicle is None:
-        conn.close()
+        session.close()
         return f"{vehicle_no}는 등록되지 않은 차량입니다."
-    rows = conn.execute(
-        "SELECT id, date, item, cost, next_due_date FROM maintenance_records WHERE vehicle_no = ? ORDER BY date DESC",
-        (vehicle_no,),
-    ).fetchall()
-    conn.close()
-    header = f"차종: {vehicle['vehicle_type']}"
+    rows = (
+        session.query(_MaintenanceRecord)
+        .filter_by(vehicle_no=vehicle_no)
+        .order_by(_MaintenanceRecord.date.desc())
+        .all()
+    )
+    header = f"차종: {vehicle.vehicle_type}"
     if not rows:
+        session.close()
         return f"{header}\n{vehicle_no} 차량의 정비이력이 없습니다."
     body = "\n".join(
-        f"[{r['id']}] {r['date']} - {r['item']} (비용: {r['cost']}원, 다음 점검 권장일: {r['next_due_date']})"
+        f"[{r.id}] {r.date} - {r.item} (비용: {r.cost}원, 다음 점검 권장일: {r.next_due_date})"
         for r in rows
     )
+    session.close()
     return f"{header}\n{body}"
 
 
@@ -160,13 +160,14 @@ def add_maintenance_record(
     등록되지 않은 차량번호면 register_vehicle로 먼저 차량을 등록해야 한다고 안내한다."""
     if not _vehicle_exists(vehicle_no):
         return f"{vehicle_no}는 등록되지 않은 차량입니다. register_vehicle로 차량을 먼저 등록해주세요."
-    conn = _get_connection()
-    conn.execute(
-        "INSERT INTO maintenance_records (vehicle_no, date, item, cost, next_due_date) VALUES (?, ?, ?, ?, ?)",
-        (vehicle_no, date, item, cost, next_due_date),
+    session = _get_session()
+    session.add(
+        _MaintenanceRecord(
+            vehicle_no=vehicle_no, date=date, item=item, cost=cost, next_due_date=next_due_date
+        )
     )
-    conn.commit()
-    conn.close()
+    session.commit()
+    session.close()
     return f"{vehicle_no} 차량의 정비이력을 등록했습니다: {date} - {item}"
 
 
@@ -183,24 +184,23 @@ def update_maintenance_record(
     confirm=True로 다시 호출해야 하며, confirm=False일 때는 절대 실행하지 않는다."""
     if not confirm:
         return "이 변경은 되돌리기 어렵습니다. 사용자에게 다시 한 번 확인한 뒤 confirm=True로 요청해주세요."
-    conn = _get_connection()
-    row = conn.execute("SELECT * FROM maintenance_records WHERE id = ?", (record_id,)).fetchone()
+    session = _get_session()
+    row = session.get(_MaintenanceRecord, record_id)
     if row is None:
-        conn.close()
+        session.close()
         return f"정비이력 {record_id}번을 찾을 수 없습니다."
-    updates = {
-        "date": date if date is not None else row["date"],
-        "item": item if item is not None else row["item"],
-        "cost": cost if cost is not None else row["cost"],
-        "next_due_date": next_due_date if next_due_date is not None else row["next_due_date"],
-    }
-    conn.execute(
-        "UPDATE maintenance_records SET date = ?, item = ?, cost = ?, next_due_date = ? WHERE id = ?",
-        (updates["date"], updates["item"], updates["cost"], updates["next_due_date"], record_id),
-    )
-    conn.commit()
-    conn.close()
-    return f"정비이력 {record_id}번을 수정했습니다: {updates['date']} - {updates['item']}"
+    if date is not None:
+        row.date = date
+    if item is not None:
+        row.item = item
+    if cost is not None:
+        row.cost = cost
+    if next_due_date is not None:
+        row.next_due_date = next_due_date
+    session.commit()
+    result = f"정비이력 {record_id}번을 수정했습니다: {row.date} - {row.item}"
+    session.close()
+    return result
 
 
 @tool
@@ -209,14 +209,14 @@ def delete_maintenance_record(record_id: int, confirm: bool = False) -> str:
     confirm=True로 다시 호출해야 하며, confirm=False일 때는 절대 실행하지 않는다."""
     if not confirm:
         return "이 삭제는 되돌릴 수 없습니다. 사용자에게 다시 한 번 확인한 뒤 confirm=True로 요청해주세요."
-    conn = _get_connection()
-    row = conn.execute("SELECT * FROM maintenance_records WHERE id = ?", (record_id,)).fetchone()
+    session = _get_session()
+    row = session.get(_MaintenanceRecord, record_id)
     if row is None:
-        conn.close()
+        session.close()
         return f"정비이력 {record_id}번을 찾을 수 없습니다."
-    conn.execute("DELETE FROM maintenance_records WHERE id = ?", (record_id,))
-    conn.commit()
-    conn.close()
+    session.delete(row)
+    session.commit()
+    session.close()
     return f"정비이력 {record_id}번을 삭제했습니다."
 
 
