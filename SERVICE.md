@@ -26,15 +26,17 @@
 - 안전 관련 증상(매뉴얼의 "안전수칙" 카테고리에 해당하는 증상)은 반드시 정비소 방문을 권고하는 문구를 포함한다
 
 ## 5. 성공 기준
-- 인-아웃 세트 20건 중 17건 이상 통과
+- 인-아웃 세트 12건(positive 5·negative 2·edge 3·guardrail 2) 중 10건 이상 통과
+- 판정은 LLM-as-Judge(Pydantic 구조화 출력)로 하고, RAGAS와 같은 개념인 Faithfulness·Answer
+  Relevancy·Context Relevance도 함께 산출해 통과 여부와 별도로 추적한다(`evaluation/eval_lib.py`)
 - 매뉴얼에 없는 차종·증상 질문에 지어낸 답 0건
 - 안전 관련 증상 질문에 정비소 방문 권고 누락 0건
 - 정비이력 삭제·수정 요청 시 재확인 없이 바로 실행된 사례 0건
 
 ## 6. 구현 구조 (에이전트 기반 분류)
-- **Supervisor (src/agent.py)**: `langgraph_supervisor`의 `create_supervisor([manual_search_agent, maintenance_agent, location_agent], model=..., prompt=...)`로 생성한 LangGraph 그래프의 진입점. 질문을 분류해 아래 3개 에이전트로 라우팅한다. 한 에이전트로 끝나는 질문은 단일 라우팅하고, "정비이력 보고 관련 매뉴얼도 같이 알려줘"처럼 여러 에이전트가 필요한 질문은 순차로 호출해 결과를 모아 답한다(Supervisor 패턴, 프롬프트로 지시). 정비·차량과 무관한 질문은 어디로도 보내지 않고 고정 응답(Fallback)으로 직접 처리한다
-- **매뉴얼 검색 에이전트 (src/manual_search_agent.py + src/retriever.py)**: `create_agent`로 생성. `src/retriever.py`의 검색 함수를 도구로 물려 매뉴얼 문서를 검색해 답한다. 매뉴얼 적재는 `data/manuals/`의 md 파일을 로드 → 프런트매터 제거 → `RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)`로 글자 수 기준(중복 포함) 분할(더미는 md지만 실제로는 PDF/HTML 등 비정형 문서가 들어올 수 있어 포맷에 의존하는 헤더 기반 분할 대신 채택) → 파일명에서 뽑은 `vehicle_type`과 `source`를 메타데이터로 붙여 Chroma에 저장(최초 1회, 이후 재사용). 질문에 차종이 포함되면 `vehicle_type` 메타데이터로 필터링한 뒤 검색해 다른 차종의 매뉴얼이 섞이지 않게 한다
-- **정비이력 관리 에이전트 (src/maintenance_agent.py + src/tools.py)**: `create_agent`로 생성. `src/tools.py`의 도구로 `data/maintenance.db`(SQLite)의 차량 마스터 테이블(등록·목록 조회)과 정비이력 테이블(등록·조회·수정·삭제)을 관리한다
+- **Supervisor (src/agent.py)**: `langgraph_supervisor`의 `create_supervisor([manual_search_agent, maintenance_agent, location_agent], model=..., prompt=...)`로 생성한 LangGraph 그래프의 진입점. 질문을 분류해 아래 3개 에이전트로 라우팅한다. 한 에이전트로 끝나는 질문은 단일 라우팅하고, "정비이력 보고 관련 매뉴얼도 같이 알려줘"처럼 여러 에이전트가 필요한 질문은 순차로 호출해 결과를 모아 답한다(Supervisor 패턴, 프롬프트로 지시). 정비·차량과 무관한 질문은 어디로도 보내지 않고 고정 응답(Fallback)으로 직접 처리한다. 점검 주기처럼 차종마다 값이 다른 매뉴얼 질문인데 차종이 불명확하면, 차량 마스터에서 조회한 현재 등록 차종 목록(하드코딩하지 않아 새 차종이 등록되면 자동 반영) 중 어느 것인지 먼저 되묻는다. 이 되묻고 답 받는 흐름은 `checkpointer`(단기 기억, 같은 대화 안에서 이어받음)와 `store`(장기 기억, 이후 대화에서도 확인된 차종을 재사용)로 지원한다. `src/api_server.py`(FastAPI)가 이 그래프를 `POST /query`로 노출한다
+- **매뉴얼 검색 에이전트 (src/manual_search_agent.py + src/retriever.py)**: `create_agent`로 생성. `src/retriever.py`의 검색 함수를 도구로 물려 매뉴얼 문서를 검색해 답한다. 매뉴얼 적재는 `data/manuals/`의 md 파일을 로드 → 프런트매터 제거 → `RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)`로 글자 수 기준(중복 포함) 분할(더미는 md지만 실제로는 PDF/HTML 등 비정형 문서가 들어올 수 있어 포맷에 의존하는 헤더 기반 분할 대신 채택) → 파일명에서 뽑은 `vehicle_type`과 `source`를 메타데이터로 붙여 Chroma에 저장(최초 1회, 이후 재사용). 검색은 벡터 검색과 BM25(Kiwi 한국어 형태소 토크나이저) 키워드 검색을 `EnsembleRetriever`로 묶은 하이브리드 방식이다. 질문에 차종이 포함되면 `vehicle_type` 메타데이터로 필터링한 뒤 검색해 다른 차종의 매뉴얼이 섞이지 않게 한다
+- **정비이력 관리 에이전트 (src/maintenance_agent.py + src/tools.py)**: `create_agent`로 생성. `src/tools.py`의 도구로 `data/maintenance.db`(SQLite, SQLAlchemy ORM으로 관리)의 차량 마스터 테이블(등록·목록 조회)과 정비이력 테이블(등록·조회·수정·삭제)을 관리한다
 - **정비소 조회 에이전트 (src/location_agent.py + src/tools.py)**: `create_agent`로 생성. `src/tools.py`의 `search_local_places` 도구(지역/업종 검색어로 장소를 찾는 범용 지역검색 도구, 정비소 전용이 아님)를 물려 처리한다. 도구 자체는 정비소를 모르며, 에이전트가 시스템 프롬프트로 지역명 + "카센터"/"자동차정비" 같은 업종 키워드를 조합한 검색어를 만들어 정비소를 찾는다. `data/local_places.json` 더미 조회로 우선 구현하고, 이후 네이버 지역검색 API 호출로 교체할 수 있게 함수 시그니처만 유지한다
 - **구분 기준**: 문서 검색이 필요한 정적 지식은 매뉴얼 검색 에이전트로, 정비이력·정비소처럼 대상 데이터가 다른 구조화 조회·관리는 각각 별도 에이전트로 나눈다
 - **개발 순서**: 매뉴얼 검색 에이전트 → 정비이력 관리 에이전트 → 정비소 조회 에이전트 순으로 만든다. 셋 다 완성하는 게 목표이며, 시간이 부족할 때만 정비소 조회 에이전트를 제외한다 (미루는 기능이 아니라 시간 부족 시의 최후 컷 라인). 정비소 조회 에이전트는 더미로 먼저 완성한 뒤 여유가 되면 네이버 지도 API 연동으로 확장한다
