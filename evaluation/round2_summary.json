@@ -1,0 +1,26 @@
+{
+  "total": 12,
+  "passed": 11,
+  "pass_rate": 0.917,
+  "by_category": {
+    "positive": [
+      5,
+      5
+    ],
+    "negative": [
+      2,
+      2
+    ],
+    "edge": [
+      2,
+      3
+    ],
+    "guardrail": [
+      2,
+      2
+    ]
+  },
+  "faithfulness": 1.0,
+  "answer_relevancy": 0.938,
+  "context_relevance": 0.975
+}
