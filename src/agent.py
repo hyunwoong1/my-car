@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.store.sqlite import SqliteStore
 from langgraph_supervisor import create_supervisor
 
 from location_agent import location_agent
@@ -24,27 +23,11 @@ supervisor_llm = ChatBedrockConverse(
     temperature=0,
 )
 
-# 차종 코드가 보통 "몸체타입_모델번호"(예: sedan_1600) 형식이라, 앞부분(몸체타입)에 대한
-# 한국어 표현만 별도로 매핑한다. 모델 번호까지는 하드코딩하지 않으므로 새 차종이 등록돼도
-# (예: sedan_2200) "세단"이라는 표현으로 자동 인식된다.
-_BODY_TYPE_ALIASES = {"sedan": "세단", "suv": "SUV"}
-
-
-def _describe_vehicle_type(vehicle_type: str) -> str:
-    """프롬프트에 보여줄 차종 표기. 별칭이 있으면 "sedan_1600(세단)"처럼 한글 표현을 덧붙인다."""
-    prefix = vehicle_type.split("_")[0].lower()
-    alias = _BODY_TYPE_ALIASES.get(prefix)
-    return f"{vehicle_type}({alias})" if alias else vehicle_type
-
-
 def _build_supervisor_prompt_text() -> str:
     """차량 마스터에 실제 등록된 차종 목록을 조회해 프롬프트에 주입한다. 특정 차종을 프롬프트에
     직접 못박아두지 않으므로, 새 차종의 차량이 등록되면 다음 호출부터 바로 반영된다."""
     types = get_registered_vehicle_types()
-    # "세단"/"SUV"처럼 사용자가 차종 코드 대신 흔히 쓰는 한글 표현을 프롬프트에 같이 보여줘야,
-    # 질문에 "세단 타이어..."처럼 코드 없이 차종이 이미 언급된 경우에도 Supervisor가 이를
-    # sedan_1600 같은 실제 코드와 같은 것으로 인식하고 다시 묻지 않는다.
-    types_desc = ", ".join(_describe_vehicle_type(t) for t in types) if types else "(현재 등록된 차량 없음)"
+    types_desc = ", ".join(types) if types else "(현재 등록된 차량 없음)"
     example_type = types[0] if types else "그 차종"
 
     return (
@@ -71,9 +54,12 @@ def _build_supervisor_prompt_text() -> str:
         "- 점검 주기, 교체 주기, km 수치처럼 차종마다 값이 다를 수 있는 매뉴얼 질문인데 차량번호도 차종도 "
         f"언급되지 않았다면, manual_search_agent에게 위임하기 전에 먼저 사용자에게 현재 등록된 차종({types_desc}) "
         "중 어느 것인지 되물어라. 증상 설명, 안전수칙, 자가정비 방법처럼 차종에 관계없이 답이 같거나 "
-        "매뉴얼에 없는 차종(전기차 등)에 대한 질문은 되묻지 말고 바로 위임하라.\n"
-        "- 질문에 \"(참고: ... 차종은 ...)\" 같은 문구가 있으면 그건 사용자에 대해 이미 확인된 정보이니 "
-        "다시 묻지 말고 그 차종으로 간주해 바로 위임하라.\n"
+        "매뉴얼에 없는 차종(전기차 등)에 대한 질문은 되묻지 말고 바로 위임하라. 이전 대화나 다른 세션에서 "
+        "확인했던 차종이 있더라도, 이 사용자가 차량을 여러 대(차종이 다르게) 갖고 있을 수 있으니 그 정보를 "
+        "넘겨짚어 다른 질문에 그대로 적용하지 마라 — 지금 이 질문에서 확인되지 않았다면 다시 물어라.\n"
+        "- 질문에 이미 차종이 코드가 아닌 일반적인 표현(예: 코드에 sedan이 있으면 사용자는 \"세단\"이라고, "
+        "suv가 있으면 \"SUV\"라고 부르는 식)으로 언급돼 있다면, 그 표현이 의미상 대응하는 등록 차종이 있는지 "
+        "스스로 판단해서 이미 확인된 것으로 간주하고 다시 묻지 마라.\n"
         "- 이미 다른 Agent의 응답(예: maintenance_agent가 알려준 차종)에 필요한 정보가 나와 있다면, 그걸 "
         "사용자에게 다시 확인하거나 다른 Agent가 그 정보를 모른다고 해서 포기하지 마라. 다음 Agent에게 "
         f"위임할 때 반드시 그 정보를 구체적인 요청 문장에 직접 포함시켜라(예: \"{example_type} 차종의 엔진오일 "
@@ -97,40 +83,28 @@ supervisor = create_supervisor(
     prompt=_supervisor_prompt,
 )
 
-# 단기/장기 기억을 SQLite 파일로 영속화한다(프로세스를 껐다 켜도 대화·기억이 유지됨).
+# 단기 기억(같은 대화 안에서 문맥 유지)만 SQLite 파일로 영속화한다(프로세스를 껐다 켜도 유지됨).
+# 차종처럼 여러 대의 차량 중 하나에만 해당할 수 있는 정보는 세션을 넘어 기억해두지 않는다 —
+# 사용자가 차종이 다른 차를 여러 대 갖고 있으면 이전에 확인한 차종을 다른 차에도 잘못 적용할
+# 위험이 있어서, 그때그때 대화(같은 thread) 안에서만 문맥을 이어받고 새 대화에서는 다시 묻는다.
 # 경로는 환경변수로 오버라이드 가능 — evaluation/run_eval.py가 평가 전용 파일로 바꿔치기해서
-# 반복 실행 때마다 운영 데이터(data/checkpoints.sqlite 등)를 건드리지 않고 깨끗하게 리셋한다.
+# 반복 실행 때마다 운영 데이터(data/checkpoints.sqlite)를 건드리지 않고 깨끗하게 리셋한다.
 CHECKPOINT_DB_PATH = os.environ.get("CHECKPOINT_DB_PATH", "data/checkpoints.sqlite")
-STORE_DB_PATH = os.environ.get("STORE_DB_PATH", "data/store.sqlite")
 
-# SqliteSaver/SqliteStore는 컨텍스트 매니저(with 블록 전용)라서, 모듈 전체 수명 동안 열어두려면
-# ExitStack으로 __enter__만 하고 명시적으로 닫지 않는다(프로세스 종료 시 정리됨).
+# SqliteSaver는 컨텍스트 매니저(with 블록 전용)라서, 모듈 전체 수명 동안 열어두려면 ExitStack으로
+# __enter__만 하고 명시적으로 닫지 않는다(프로세스 종료 시 정리됨).
 _sqlite_stack = ExitStack()
-checkpointer = _sqlite_stack.enter_context(SqliteSaver.from_conn_string(CHECKPOINT_DB_PATH))  # 단기 기억
-store = _sqlite_stack.enter_context(SqliteStore.from_conn_string(STORE_DB_PATH))  # 장기 기억
-store.setup()  # SqliteSaver와 달리 SqliteStore는 최초 1회 setup()을 직접 호출해야 한다
-app = supervisor.compile(checkpointer=checkpointer, store=store)
+checkpointer = _sqlite_stack.enter_context(SqliteSaver.from_conn_string(CHECKPOINT_DB_PATH))
+app = supervisor.compile(checkpointer=checkpointer)
 
 tracer = FileTracer("trace.jsonl")
 
 
-def _detect_vehicle_type(text: str) -> Optional[str]:
-    """사용자 발화에서 차종을 감지한다(되물음에 대한 답, "세단이야" 같은 응답에서 쓴다).
-    차량 마스터에 실제 등록된 차종만 대상으로 하므로, 새 차종이 등록되면 자동으로 인식 대상이 된다."""
-    lowered = text.lower()
-    for vehicle_type in get_registered_vehicle_types():
-        prefix = vehicle_type.split("_")[0].lower()
-        alias = _BODY_TYPE_ALIASES.get(prefix, prefix).lower()
-        if vehicle_type.lower() in lowered or prefix in lowered or alias in lowered:
-            return vehicle_type
-    return None
-
-
-def stream_answer_tokens(content: str, thread_id: str, user_id: str, callbacks: Optional[list] = None):
+def stream_answer_tokens(content: str, thread_id: str, callbacks: Optional[list] = None):
     """Supervisor 그래프를 실행하며 최종 답변 텍스트 조각을 순서대로 yield한다.
     콘솔 데모(run())와 API의 스트리밍 엔드포인트가 이 제너레이터를 함께 쓴다."""
     config = {
-        "configurable": {"thread_id": thread_id, "user_id": user_id},
+        "configurable": {"thread_id": thread_id},
         "recursion_limit": 25,
     }
     if callbacks:
@@ -158,28 +132,17 @@ def stream_answer_tokens(content: str, thread_id: str, user_id: str, callbacks: 
             yield text
 
 
-def run(question: str, thread_id: str = "default", user_id: str = "me") -> None:
+def run(question: str, thread_id: str = "default") -> None:
     """질문 하나를 Supervisor 그래프에 흘려보내며 supervisor의 최종 답변만 스트리밍한다.
-    같은 thread_id로 다시 부르면 checkpointer 덕분에 이전 대화(되물음 등)를 이어받고,
-    user_id별로 store에 남은 "마지막으로 확인된 차종"이 있으면 질문에 참고 문구로 덧붙인다."""
-    remembered = store.get(("users", user_id), "vehicle_type")
-    content = question
-    if remembered and not _detect_vehicle_type(question):
-        content = f"{question}\n(참고: 이 사용자가 이전에 확인한 차종은 {remembered.value['vehicle_type']}입니다.)"
-
+    같은 thread_id로 다시 부르면 checkpointer 덕분에 이전 대화(되물음 등)를 이어받는다."""
     print(f"질문: {question}")
-    for text in stream_answer_tokens(content, thread_id, user_id, callbacks=[tracer]):
+    for text in stream_answer_tokens(question, thread_id, callbacks=[tracer]):
         print(text, end="", flush=True)
     print()
-
-    detected = _detect_vehicle_type(question)
-    if detected:
-        store.put(("users", user_id), "vehicle_type", {"vehicle_type": detected})
 
 
 if __name__ == "__main__":
     # 1턴: 차종을 안 밝혀 supervisor가 되물어야 하는 질문
     run("타이어 공기압은 얼마나 자주 점검해야 해?", thread_id="demo")
-    # 2턴: 같은 thread_id로 이어서 답하면(단기 기억) 되물음에 대한 답으로 이해하고,
-    # 이 차종은 store에 남아(장기 기억) 이후 다른 대화에서도 참고된다.
+    # 2턴: 같은 thread_id로 이어서 답하면(단기 기억) 되물음에 대한 답으로 이해한다.
     run("세단이야", thread_id="demo")

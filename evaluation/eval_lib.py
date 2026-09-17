@@ -137,7 +137,7 @@ def run_case(app, row: dict) -> dict:
     result = app.invoke(
         {"messages": [HumanMessage(content=row["input"])]},
         {
-            "configurable": {"thread_id": f"eval-{row['id']}", "user_id": f"eval-{row['id']}"},
+            "configurable": {"thread_id": f"eval-{row['id']}"},
             "callbacks": [rec],
             "recursion_limit": 25,
         },

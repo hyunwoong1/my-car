@@ -82,13 +82,10 @@ PYTHONPATH=src uvicorn api_server:api --port 8000
 
 ### 요청 예시
 
-`question`은 필수, `user_id`는 선택이다(안 보내면 `"default"`로 처리). `user_id`별로 장기 기억(마지막에
-확인된 차종 등)이 따로 유지되므로, 여러 사용자가 같은 서버를 쓸 때 구분하려면 넣어준다.
-
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?", "user_id": "alice"}'
+  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
 ```
 
 ### 응답 예시
@@ -152,17 +149,17 @@ data: {"message": "An error occurred (ThrottlingException) when calling the Conv
 - 안전 관련 증상은 반드시 정비소 방문 권고 문구 포함
 - 차종마다 값이 다를 수 있는 질문(점검 주기 등)인데 차종이 불명확하면, 현재 차량 마스터에 등록된
   차종 중 어느 것인지 먼저 되묻는다 (하드코딩된 차종명이 아니라 DB에서 조회해 프롬프트에 주입하므로,
-  새 차종이 등록되면 자동으로 선택지에 반영됨)
+  새 차종이 등록되면 자동으로 선택지에 반영됨). 이전 대화나 다른 세션에서 확인된 차종이 있어도
+  세션을 넘어 다른 질문에 그대로 넘겨짚지 않는다 — 사용자가 차종이 다른 차량을 여러 대 갖고 있을
+  수 있어서, 지금 이 질문에서 확인되지 않았다면 다시 묻는다
 
 ## 메모리
 
-SQLite 파일로 영속화되어 있어 프로세스를 껐다 켜도 대화·기억이 남는다(운영: `data/checkpoints.sqlite`,
-`data/store.sqlite` — 경로는 `CHECKPOINT_DB_PATH`/`STORE_DB_PATH` 환경변수로 바꿀 수 있고,
-`evaluation/run_eval.py`는 평가 전용 파일을 매 실행 전 초기화해서 씀).
-
-- **단기 기억**: `SqliteSaver`(checkpointer) — 같은 `thread_id` 안에서 되물음 → 답변 흐름을 이어받음
-- **장기 기억**: `SqliteStore` — `user_id`별로 마지막에 확인된 차종을 저장해 이후 대화에서도(프로세스를
-  재시작해도) 재사용
+`SqliteSaver`(checkpointer)로 SQLite 파일(`data/checkpoints.sqlite`, `CHECKPOINT_DB_PATH` 환경변수로
+경로 변경 가능)에 영속화되어 있어, 프로세스를 껐다 켜도 같은 `thread_id` 안의 대화(되물음 → 답변 등)는
+이어받는다. 차종처럼 차량마다 다를 수 있는 정보는 세션을 넘어서는 장기 기억으로 남기지 않는다 —
+다차량 사용자에게 이전에 확인한 차종을 다른 차량 질문에 잘못 적용할 위험이 있어서, 매번 대화(같은
+`thread_id`) 안에서만 문맥을 이어받고 새 대화에서는 다시 확인한다.
 
 ## 평가
 

@@ -5,8 +5,6 @@ __pycache__/
 data/chroma_db/
 data/maintenance.db
 data/checkpoints.sqlite*
-data/store.sqlite*
 evaluation/maintenance_test.db
 evaluation/checkpoints_test.sqlite*
-evaluation/store_test.sqlite*
 trace.jsonl
