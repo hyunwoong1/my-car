@@ -37,7 +37,7 @@ from eval_lib import load_test_queries, run_case, summarize, write_report  # noq
 
 
 def main(round_no: int) -> None:
-    from agent import app  # mini-pjt의 Supervisor 그래프
+    from agent import app, supervisor_llm  # mini-pjt의 Supervisor 그래프
 
     cases = load_test_queries()
     results = [run_case(app, row) for row in cases]
@@ -51,7 +51,11 @@ def main(round_no: int) -> None:
         except FileNotFoundError:
             pass
 
-    write_report(f"evaluation/round{round_no}_report.md", round_no, results, summary, prev_summary)
+    write_report(
+        f"evaluation/round{round_no}_report.md",
+        round_no, results, summary, prev_summary,
+        agent_model=supervisor_llm.model_id,
+    )
     with open(f"evaluation/round{round_no}_summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     with open(f"evaluation/round{round_no}_results.json", "w", encoding="utf-8") as f:

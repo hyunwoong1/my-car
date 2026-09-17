@@ -189,9 +189,19 @@ def summarize(results: list[dict]) -> dict:
     }
 
 
-def write_report(path: str, round_no: int, results: list[dict], summary: dict, prev_summary: dict | None = None) -> None:
+def write_report(
+    path: str,
+    round_no: int,
+    results: list[dict],
+    summary: dict,
+    prev_summary: dict | None = None,
+    agent_model: str | None = None,
+) -> None:
     lines = [f"# 자체 평가 리포트 — Round {round_no}", ""]
     lines.append(f"- 실행 시각: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    if agent_model:
+        lines.append(f"- 에이전트 모델: {agent_model}")
+    lines.append(f"- 심사(Judge) 모델: {JUDGE_MODEL}")
     lines.append(f"- 전체 통과: {summary['passed']}/{summary['total']} ({summary['pass_rate']*100:.0f}%)")
     lines.append(f"- Faithfulness 평균: {summary['faithfulness']}")
     lines.append(f"- Answer Relevancy 평균: {summary['answer_relevancy']}")

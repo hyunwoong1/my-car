@@ -18,6 +18,7 @@ api = FastAPI()
 
 class QueryRequest(BaseModel):
     question: str
+    user_id: Optional[str] = None  # 없으면 "default"로 처리(장기 기억을 user_id별로 구분해서 쓴다)
 
 
 class TraceStep(BaseModel):
@@ -38,9 +39,9 @@ def query(req: QueryRequest) -> QueryResponse:
     result = graph_app.invoke(
         {"messages": [HumanMessage(content=req.question)]},
         {
-            # 요청마다 새 대화(단기 기억은 안 이어받음)로 처리하되, user_id는 고정해
-            # 장기 기억(마지막으로 확인된 차종 등)은 API 호출 사이에도 유지되게 한다.
-            "configurable": {"thread_id": str(uuid.uuid4()), "user_id": "default"},
+            # 요청마다 새 대화(단기 기억은 안 이어받음)로 처리하되, user_id는 요청에 실어 온 값(없으면
+            # "default")으로 고정해 장기 기억(마지막으로 확인된 차종 등)을 그 사용자 기준으로 유지한다.
+            "configurable": {"thread_id": str(uuid.uuid4()), "user_id": req.user_id or "default"},
             "callbacks": [rec],
             "recursion_limit": 25,
         },
@@ -70,7 +71,7 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
             for text in stream_answer_tokens(
                 req.question,
                 thread_id=str(uuid.uuid4()),
-                user_id="default",
+                user_id=req.user_id or "default",
                 callbacks=[rec],
             ):
                 yield _sse_event("token", {"text": text})

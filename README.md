@@ -82,10 +82,13 @@ PYTHONPATH=src uvicorn api_server:api --port 8000
 
 ### 요청 예시
 
+`question`은 필수, `user_id`는 선택이다(안 보내면 `"default"`로 처리). `user_id`별로 장기 기억(마지막에
+확인된 차종 등)이 따로 유지되므로, 여러 사용자가 같은 서버를 쓸 때 구분하려면 넣어준다.
+
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
+  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?", "user_id": "alice"}'
 ```
 
 ### 응답 예시
