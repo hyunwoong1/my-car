@@ -36,18 +36,28 @@ class ToolRecorder(BaseCallbackHandler):
         self.tools: list[str] = []
         self.agents: list[str] = []
         self.contexts: list[str] = []
+        self._names: dict = {}  # run_id -> 도구 이름 (on_tool_end에서 핸드오프 여부 판단용)
 
-    def on_tool_start(self, serialized, input_str, **kwargs):
+    def on_tool_start(self, serialized, input_str, *, run_id, **kwargs):
         name = (serialized or {}).get("name", "")
+        self._names[run_id] = name
         if name.startswith("transfer_to_"):
             self.agents.append(name[len("transfer_to_"):])
         elif name and not name.startswith("transfer_back"):
             self.tools.append(name)
 
-    def on_tool_end(self, output, **kwargs):
+    def on_tool_end(self, output, *, run_id, **kwargs):
+        # 핸드오프 도구(transfer_to_*/transfer_back_to_*)는 검색 결과가 아니라 그래프 라우팅용
+        # Command 객체를 반환한다(.content가 없어 str(output)이 그대로 흘러들어와 있었다).
+        # 텍스트 접두사가 아니라 도구 이름으로 걸러내야 이런 값이 심사자 컨텍스트에 안 섞인다.
+        name = self._names.pop(run_id, "")
+        if name.startswith("transfer_to_") or name.startswith("transfer_back"):
+            return
         text = str(getattr(output, "content", output))
-        if not text.startswith("Successfully transferred") and not text.startswith("Transferring"):
-            self.contexts.append(text[:1000])
+        # BM25+벡터 앙상블이 문서를 최대 6개까지 합치면서 한 번의 매뉴얼 검색 결과가
+        # 1000자를 넘기기 쉬워졌다. 심사자에게 잘린 뒷부분 근거가 안 보이면 실제로는
+        # 근거가 있는 답변도 "지어냄"으로 오판되므로(q01), 잘림 길이를 넉넉히 늘린다.
+        self.contexts.append(text[:3000])
 
 
 def load_test_queries(path: str = "evaluation/test_queries.csv") -> list[dict]:

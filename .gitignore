@@ -4,4 +4,5 @@
 __pycache__/
 data/chroma_db/
 data/maintenance.db
+evaluation/maintenance_test.db
 trace.jsonl

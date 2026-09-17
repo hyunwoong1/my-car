@@ -1,11 +1,23 @@
 """evaluation/run_eval.py - 인-아웃 세트 자체 평가 실행.
 
 사용법: python evaluation/run_eval.py <round_no>
-  round_no=1이면 evaluation/round1_report.md만 만든다.
-  round_no=2 이상이면 이전 라운드의 summary json을 읽어 개선폭도 함께 리포트에 적는다.
+  round_no=1이면 evaluation/round1_report.md만 만든다(최초 1회성 기록, 이후 덮어쓰지 않음).
+  round_no=2(기본값)는 이후 반복 개선 사이클마다 계속 덮어써서
+  evaluation/round2_report.md 하나에 최신 상태만 남긴다.
+
+정비이력 DB는 evaluation/maintenance_test.db라는 별도 테스트 DB를 쓴다(운영용
+data/maintenance.db는 건드리지 않음). 매 실행 전 이 테스트 DB 파일을 지우고
+data/seed.json 기준으로 다시 시딩해, q03(등록) 케이스가 반복 실행 때마다
+데이터를 누적시켜 q04/q08 같은 다른 케이스를 오염시키는 문제를 막는다.
 """
 import json
+import os
 import sys
+
+TEST_DB_PATH = "evaluation/maintenance_test.db"
+if os.path.exists(TEST_DB_PATH):
+    os.remove(TEST_DB_PATH)
+os.environ["MAINTENANCE_DB_PATH"] = TEST_DB_PATH
 
 sys.path.insert(0, "src")
 sys.path.insert(0, "evaluation")
@@ -40,5 +52,5 @@ def main(round_no: int) -> None:
 
 
 if __name__ == "__main__":
-    round_arg = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    round_arg = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     main(round_arg)
