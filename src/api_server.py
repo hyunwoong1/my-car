@@ -6,6 +6,7 @@ import uuid
 from typing import Iterator, Optional
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -15,9 +16,20 @@ from tracer import RequestRecorder, get_text
 
 api = FastAPI()
 
+# 개인용 로컬 도구라 브라우저에서 다른 오리진(예: web/index.html을 file://로 열거나
+# 별도 정적 서버로 띄운 경우)에서도 호출할 수 있게 전체 허용한다. 인증이 없는 로컬 개발
+# 서버 전제이므로 이 정도 개방이 적절하지만, 외부에 노출할 서버라면 좁혀야 한다.
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
+
 
 class QueryRequest(BaseModel):
     question: str
+    thread_id: Optional[str] = None  # 없으면 매 요청이 새 대화로 처리됨(단기 기억 안 이어짐)
 
 
 class TraceStep(BaseModel):
@@ -38,8 +50,8 @@ def query(req: QueryRequest) -> QueryResponse:
     result = graph_app.invoke(
         {"messages": [HumanMessage(content=req.question)]},
         {
-            # 요청마다 새 대화(단기 기억은 안 이어받음)로 처리한다.
-            "configurable": {"thread_id": str(uuid.uuid4())},
+            # 클라이언트가 thread_id를 보내면 그 대화를 이어가고, 안 보내면 새 대화로 처리한다.
+            "configurable": {"thread_id": req.thread_id or str(uuid.uuid4())},
             "callbacks": [rec],
             "recursion_limit": 25,
         },
@@ -68,7 +80,7 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
         try:
             for text in stream_answer_tokens(
                 req.question,
-                thread_id=str(uuid.uuid4()),
+                thread_id=req.thread_id or str(uuid.uuid4()),
                 callbacks=[rec],
             ):
                 yield _sse_event("token", {"text": text})

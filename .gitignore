@@ -1,6 +1,7 @@
 # .gitignore
 .venv/
 .env
+.*
 __pycache__/
 data/chroma_db/
 data/maintenance.db
@@ -8,3 +9,4 @@ data/checkpoints.sqlite*
 evaluation/maintenance_test.db
 evaluation/checkpoints_test.sqlite*
 trace.jsonl
+skills-lock.json

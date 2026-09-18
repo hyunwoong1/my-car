@@ -77,7 +77,7 @@ python evaluation/run_eval.py
 
 ```bash
 cd mini-pjt
-PYTHONPATH=src uvicorn api_server:api --port 8000
+$env:PYTHONPATH = "src"; uvicorn api_server:api --port 8000
 ```
 
 ### 요청 예시

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>정비노트 — 개인 차량 관리</title>
+  <meta name="description" content="차량 매뉴얼, 정비이력, 근처 정비소를 채팅으로 확인하는 개인 차량 관리 도구." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+
+  <div class="shell">
+    <div class="shell__topbar">
+      <button class="icon-btn" id="railToggle" type="button" aria-expanded="false" aria-controls="rail">
+        <span aria-hidden="true">☰</span>
+        <span class="sr-only">메뉴 열기</span>
+      </button>
+      <span class="wordmark wordmark--sm">정비노트</span>
+      <button class="cmdk-trigger cmdk-trigger--compact" id="cmdkTriggerMobile" type="button" aria-haspopup="dialog">
+        <kbd>⌘K</kbd>
+      </button>
+    </div>
+
+    <div class="shell__body">
+      <div class="rail__backdrop" id="railBackdrop" data-close-rail hidden></div>
+
+      <aside class="rail" id="rail">
+        <div class="rail__top">
+          <a class="wordmark" href="#top">정비노트</a>
+          <p class="rail__tagline">개인 차량 관리</p>
+        </div>
+
+        <button class="rail__new-chat" id="newChatBtn" type="button">
+          <span aria-hidden="true">+</span> 새 대화
+        </button>
+
+        <nav class="rail__quick" aria-label="예시 질문">
+          <p class="rail__label">예시 질문</p>
+          <button class="rail__item" type="button" data-example="세단 타이어 공기압은 얼마나 자주 점검해야 해?">
+            타이어 공기압 점검 주기
+          </button>
+          <button class="rail__item" type="button" data-example="브레이크 밟을 때 끼익 소리가 나는데 어떻게 해야 해?">
+            브레이크 소음 진단
+          </button>
+          <button class="rail__item" type="button" data-example="강남역 근처 정비소 좀 찾아줘">
+            근처 정비소 찾기
+          </button>
+        </nav>
+
+        <button class="rail__info" id="infoBtn" type="button" aria-haspopup="dialog">
+          동작 방식 · FAQ
+        </button>
+
+        <div class="rail__bottom">
+          <div class="rail__status-row">
+            <span class="status status--idle" id="connStatus">대기</span>
+            <button class="cmdk-trigger" id="cmdkTrigger" type="button" aria-haspopup="dialog">
+              <span>빠른 명령</span><kbd>⌘K</kbd>
+            </button>
+          </div>
+          <button class="rail__link" id="apiConfigBtn" type="button">API 주소 설정</button>
+          <p class="rail__meta">FastAPI + LangGraph Supervisor</p>
+        </div>
+      </aside>
+
+      <main class="workspace" id="main">
+        <div class="chat" id="chat">
+          <div class="chat__log" id="chatMessages" role="log" aria-live="polite">
+            <div class="msg msg--agent">
+              <p>
+                안녕하세요. 차량 매뉴얼, 정비이력, 근처 정비소 관련 질문을 도와드릴 수
+                있습니다. 차량번호나 궁금한 증상을 말씀해 주세요.
+              </p>
+            </div>
+          </div>
+          <form class="chat__form" id="chatForm">
+            <label class="sr-only" for="chatInput">질문 입력</label>
+            <input
+              id="chatInput"
+              name="question"
+              type="text"
+              placeholder="예: 12가3456 타이어 공기압 얼마나 자주 봐야 해?"
+              autocomplete="off"
+              required
+            />
+            <button type="submit" class="btn btn--primary btn--send" id="sendBtn">
+              <span class="btn__label">보내기</span>
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="info-dialog" id="infoDialog" role="dialog" aria-modal="true" aria-label="동작 방식 및 FAQ" hidden>
+    <div class="info-dialog__backdrop" data-close-info></div>
+    <div class="info-dialog__panel">
+      <div class="info-dialog__bar">
+        <h2>동작 방식 · FAQ</h2>
+        <button class="icon-btn" data-close-info type="button">
+          <span aria-hidden="true">✕</span>
+          <span class="sr-only">닫기</span>
+        </button>
+      </div>
+      <div class="info-dialog__body">
+        <section class="info-block">
+          <h3>동작 방식</h3>
+          <ol class="info-steps">
+            <li>
+              <span class="info-steps__index">01</span>
+              <p>
+                질문을 Supervisor 에이전트가 받아, 매뉴얼 검색·정비이력·정비소 조회 중 담당
+                에이전트에게 위임합니다.
+              </p>
+            </li>
+            <li>
+              <span class="info-steps__index">02</span>
+              <p>담당 에이전트가 실제 도구(RAG 검색, SQLite 조회, 지역 검색)를 호출해 근거를 확인합니다.</p>
+            </li>
+            <li>
+              <span class="info-steps__index">03</span>
+              <p>근거가 없으면 지어내지 않고, 확인되지 않는 정보라고 그대로 안내합니다.</p>
+            </li>
+          </ol>
+          <div class="code-card">
+            <div class="code-card__bar">
+              <span>example — POST /query 응답</span>
+              <span class="status status--ok">200 OK</span>
+            </div>
+            <pre class="code-card__body"><code><span class="tok-muted">{</span>
+  <span class="tok-key">"answer"</span>: <span class="tok-str">"…"</span>,
+  <span class="tok-key">"contexts"</span>: [<span class="tok-str">"…"</span>],
+  <span class="tok-key">"trace"</span>: [
+    <span class="tok-muted">{</span> <span class="tok-key">"type"</span>: <span class="tok-str">"agent"</span>, <span class="tok-key">"name"</span>: <span class="tok-str">"maintenance_agent"</span> <span class="tok-muted">}</span>
+  ]
+<span class="tok-muted">}</span></code></pre>
+          </div>
+        </section>
+
+        <section class="info-block">
+          <h3>자주 묻는 질문</h3>
+          <div class="faq__list">
+            <details>
+              <summary>차종이 다른 차를 여러 대 갖고 있으면 어떻게 되나요?</summary>
+              <p>
+                이전에 확인한 차종을 다른 질문에 그대로 적용하지 않습니다. 지금 질문에서 차종이
+                확인되지 않으면 다시 물어봅니다.
+              </p>
+            </details>
+            <details>
+              <summary>정비이력을 삭제하거나 수정하면 바로 반영되나요?</summary>
+              <p>되돌리기 어려운 변경이라, 먼저 한 번 더 확인을 요청한 뒤에만 실행합니다.</p>
+            </details>
+            <details>
+              <summary>매뉴얼에 없는 내용을 물어보면요?</summary>
+              <p>지어내지 않고 확인할 수 없는 정보라고 안내합니다.</p>
+            </details>
+            <details>
+              <summary>API를 직접 호출할 수도 있나요?</summary>
+              <p>
+                <code>POST /query</code>는 answer·contexts·trace를 한 번에, <code>POST /query/stream</code>은
+                같은 내용을 토큰 단위 SSE로 스트리밍합니다.
+              </p>
+            </details>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="빠른 명령" hidden>
+    <div class="cmdk__backdrop" data-close></div>
+    <div class="cmdk__panel">
+      <input class="cmdk__input" id="cmdkInput" placeholder="명령 검색…" />
+      <ul class="cmdk__list" id="cmdkList" role="listbox"></ul>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
