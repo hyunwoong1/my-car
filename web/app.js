@@ -8,12 +8,19 @@
 
   // 같은 thread_id를 계속 보내야 서버(SqliteSaver 체크포인터)가 같은 대화로 이어받는다.
   // 안 보내면 서버가 매 요청을 새 대화로 취급해 문맥이 끊긴다 — "새 대화 시작"을 누를 때만 새로 발급한다.
+  // localStorage에 저장해두면 새로고침하거나 브라우저를 닫았다 열어도 같은 대화로 이어진다
+  // (화면의 말풍선은 다시 안 뜨지만, 다음 질문부터 서버가 이전 문맥을 그대로 기억한다).
+  const THREAD_ID_KEY = "threadId";
+  const getStoredThreadId = () => localStorage.getItem(THREAD_ID_KEY);
+  const setStoredThreadId = (id) => localStorage.setItem(THREAD_ID_KEY, id);
+
   function generateThreadId() {
     return typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
-  let threadId = generateThreadId();
+  let threadId = getStoredThreadId() || generateThreadId();
+  setStoredThreadId(threadId);
 
   // ---------- Markdown rendering (agent answers only — user input stays literal) ----------
   // marked/DOMPurify는 CDN에서 로드된다. 오프라인 등으로 로드에 실패하면
@@ -171,6 +178,7 @@
 
   function startNewChat() {
     threadId = generateThreadId(); // 새 thread_id를 발급해야 서버도 진짜 새 대화로 취급한다
+    setStoredThreadId(threadId);
     messagesEl.innerHTML = "";
     addMessage(
       "agent",
