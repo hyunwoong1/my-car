@@ -59,6 +59,11 @@ class FileTracer(BaseCallbackHandler):
     def on_llm_error(self, error, *, run_id, **kw):
         self._write({"event": "llm_error", "run_id": str(run_id), "error": str(error)})
 
+    def log_error(self, error: Exception) -> None:
+        """LLM 콜백 밖에서 잡힌 예외(API 핸들러의 try/except 등)를 기록한다. 사용자에게는
+        일반적인 오류 메시지만 보여주고, 실제 예외 내용은 이 파일에만 남기기 위한 용도다."""
+        self._write({"event": "server_error", "error": str(error)})
+
 
 class RequestRecorder(BaseCallbackHandler):
     """API 요청 한 건 동안 거친 에이전트·도구와 도구 결과(컨텍스트)를 순서대로 모은다.

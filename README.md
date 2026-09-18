@@ -146,11 +146,13 @@ event: done
 data: {"contexts": ["차종: sedan_1600\n[6] 2025-07-15 - 엔진오일 교체 ..."], "trace": [{"type": "agent", "name": "maintenance_agent"}, {"type": "tool", "name": "get_maintenance_history", "args": "{'vehicle_no': '12가3456'}"}]}
 ```
 
-그래프 실행 중 예외가 나면 `event: done` 대신 아래처럼 온다:
+그래프 실행 중 예외가 나면 `event: done` 대신 아래처럼 온다. 실제 예외 내용(예: Bedrock
+한도 초과 메시지)은 `trace.jsonl`에만 남기고, 클라이언트에는 일반적인 오류 메시지만 보낸다
+(`/query`는 같은 경우 502로 응답):
 
 ```
 event: error
-data: {"message": "An error occurred (ThrottlingException) when calling the ConverseStream operation..."}
+data: {"message": "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
 ```
 
 ## 가드레일

@@ -5,7 +5,7 @@ import json
 import uuid
 from typing import Iterator, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
@@ -15,6 +15,9 @@ from agent import app as graph_app, stream_answer_tokens, tracer
 from tracer import RequestRecorder, get_text
 
 api = FastAPI()
+
+# 예외가 나면 원인(스택/에러 메시지)은 trace.jsonl에만 남기고, 사용자에게는 이 문구만 보여준다.
+GENERIC_ERROR_MESSAGE = "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
 # 개인용 로컬 도구라 브라우저에서 다른 오리진(예: web/index.html을 file://로 열거나
 # 별도 정적 서버로 띄운 경우)에서도 호출할 수 있게 전체 허용한다. 인증이 없는 로컬 개발
@@ -47,15 +50,21 @@ class QueryResponse(BaseModel):
 @api.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest) -> QueryResponse:
     rec = RequestRecorder()
-    result = graph_app.invoke(
-        {"messages": [HumanMessage(content=req.question)]},
-        {
-            # 클라이언트가 thread_id를 보내면 그 대화를 이어가고, 안 보내면 새 대화로 처리한다.
-            "configurable": {"thread_id": req.thread_id or str(uuid.uuid4())},
-            "callbacks": [rec, tracer],
-            "recursion_limit": 25,
-        },
-    )
+    try:
+        result = graph_app.invoke(
+            {"messages": [HumanMessage(content=req.question)]},
+            {
+                # 클라이언트가 thread_id를 보내면 그 대화를 이어가고, 안 보내면 새 대화로 처리한다.
+                "configurable": {"thread_id": req.thread_id or str(uuid.uuid4())},
+                "callbacks": [rec, tracer],
+                "recursion_limit": 25,
+            },
+        )
+    except Exception as e:
+        # 예외 내용(예: Bedrock 한도 초과 메시지)은 trace.jsonl에만 남기고, 클라이언트에는
+        # 일반적인 오류 메시지만 돌려준다.
+        tracer.log_error(e)
+        raise HTTPException(status_code=502, detail=GENERIC_ERROR_MESSAGE)
     answer = get_text(result["messages"][-1])
     return QueryResponse(
         answer=answer,
@@ -86,8 +95,10 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
                 yield _sse_event("token", {"text": text})
         except Exception as e:
             # 그래프 실행 중 예외(예: Bedrock 한도 초과)가 나면 연결이 그냥 끊기지 않도록,
-            # event: error로 클라이언트에 알리고 스트림을 정상 종료한다.
-            yield _sse_event("error", {"message": str(e)})
+            # event: error로 클라이언트에 알리고 스트림을 정상 종료한다. 예외 내용 자체는
+            # trace.jsonl에만 남기고, 클라이언트에는 일반적인 오류 메시지만 보낸다.
+            tracer.log_error(e)
+            yield _sse_event("error", {"message": GENERIC_ERROR_MESSAGE})
             return
         yield _sse_event("done", {
             "contexts": rec.contexts,
