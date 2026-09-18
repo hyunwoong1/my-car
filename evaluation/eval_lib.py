@@ -12,53 +12,19 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
-from langchain_core.callbacks import BaseCallbackHandler
 from pydantic import BaseModel, Field
+
+from tracer import RequestRecorder, get_text
 
 load_dotenv()
 
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL") or "us.anthropic.claude-sonnet-4-6"
 judge_llm = ChatBedrockConverse(model=JUDGE_MODEL, region_name="us-east-1", temperature=0)
 
-
-def get_text(message) -> str:
-    """ChatBedrockConverse는 content를 블록 리스트로 주기도 하므로 텍스트만 모아 반환한다."""
-    content = message.content
-    if isinstance(content, list):
-        return "".join(block.get("text", "") for block in content if isinstance(block, dict))
-    return content
-
-
-class ToolRecorder(BaseCallbackHandler):
-    """Supervisor 구조에서는 서브 에이전트의 도구 호출이 최상위 메시지에 안 남으므로,
-    콜백으로 실제 호출된 도구/거쳐간 에이전트/도구 결과(컨텍스트)를 전부 기록한다."""
-
-    def __init__(self):
-        self.tools: list[str] = []
-        self.agents: list[str] = []
-        self.contexts: list[str] = []
-        self._names: dict = {}  # run_id -> 도구 이름 (on_tool_end에서 핸드오프 여부 판단용)
-
-    def on_tool_start(self, serialized, input_str, *, run_id, **kwargs):
-        name = (serialized or {}).get("name", "")
-        self._names[run_id] = name
-        if name.startswith("transfer_to_"):
-            self.agents.append(name[len("transfer_to_"):])
-        elif name and not name.startswith("transfer_back"):
-            self.tools.append(name)
-
-    def on_tool_end(self, output, *, run_id, **kwargs):
-        # 핸드오프 도구(transfer_to_*/transfer_back_to_*)는 검색 결과가 아니라 그래프 라우팅용
-        # Command 객체를 반환한다(.content가 없어 str(output)이 그대로 흘러들어와 있었다).
-        # 텍스트 접두사가 아니라 도구 이름으로 걸러내야 이런 값이 심사자 컨텍스트에 안 섞인다.
-        name = self._names.pop(run_id, "")
-        if name.startswith("transfer_to_") or name.startswith("transfer_back"):
-            return
-        text = str(getattr(output, "content", output))
-        # BM25+벡터 앙상블이 문서를 최대 6개까지 합치면서 한 번의 매뉴얼 검색 결과가
-        # 1000자를 넘기기 쉬워졌다. 심사자에게 잘린 뒷부분 근거가 안 보이면 실제로는
-        # 근거가 있는 답변도 "지어냄"으로 오판되므로(q01), 잘림 길이를 넉넉히 늘린다.
-        self.contexts.append(text[:3000])
+# 심사자 컨텍스트 하나가 너무 길면 잘라서 넘긴다. BM25+벡터 앙상블이 문서를 최대 6개까지
+# 합치면서 한 번의 매뉴얼 검색 결과가 1000자를 넘기기 쉬워졌는데, 잘린 뒷부분 근거가 안
+# 보이면 실제로는 근거가 있는 답변도 "지어냄"으로 오판되므로(q01) 넉넉히 잡는다.
+MAX_CONTEXT_CHARS = 3000
 
 
 def load_test_queries(path: str = "evaluation/test_queries.csv") -> list[dict]:
@@ -134,7 +100,7 @@ def run_case(app, row: dict) -> dict:
     """케이스 하나를 실제로 실행하고 심사까지 마쳐 결과 dict를 반환한다."""
     from langchain_core.messages import HumanMessage
 
-    rec = ToolRecorder()
+    rec = RequestRecorder()
     result = app.invoke(
         {"messages": [HumanMessage(content=row["input"])]},
         {
@@ -144,7 +110,10 @@ def run_case(app, row: dict) -> dict:
         },
     )
     answer = get_text(result["messages"][-1])
-    verdict = judge_case(row["input"], answer, rec.tools, rec.contexts, row["expected_traits"], row["forbidden"])
+    tools_called = [step["name"] for step in rec.trace if step["type"] == "tool"]
+    agents_visited = [step["name"] for step in rec.trace if step["type"] == "agent"]
+    contexts = [c[:MAX_CONTEXT_CHARS] for c in rec.contexts]
+    verdict = judge_case(row["input"], answer, tools_called, contexts, row["expected_traits"], row["forbidden"])
 
     traits_ok = all(verdict.traits_met) if row["expected_traits"] else True
     forbidden_ok = not any(verdict.forbidden_triggered) if row["forbidden"] else True
@@ -155,8 +124,8 @@ def run_case(app, row: dict) -> dict:
         "category": row["category"],
         "input": row["input"],
         "answer": answer,
-        "tools_called": rec.tools,
-        "agents_visited": rec.agents,
+        "tools_called": tools_called,
+        "agents_visited": agents_visited,
         "expected_tools": row["expected_tools"],
         "expected_traits": row["expected_traits"],
         "traits_met": verdict.traits_met,

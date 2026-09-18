@@ -266,6 +266,7 @@
       run: startNewChat,
     },
     {
+      id: "api-config",
       label: "API 주소 설정",
       hint: getApiBase(),
       run: () => {
@@ -329,7 +330,7 @@
   cmdkTrigger.addEventListener("click", openCmdk);
   cmdkTriggerMobile.addEventListener("click", openCmdk);
   cmdk.querySelector("[data-close]").addEventListener("click", closeCmdk);
-  apiConfigBtn.addEventListener("click", () => COMMANDS.find((c) => c.hint.includes("://") || c.label.includes("API")).run());
+  apiConfigBtn.addEventListener("click", () => COMMANDS.find((c) => c.id === "api-config").run());
 
   cmdkInput.addEventListener("input", () => {
     const q = cmdkInput.value.toLowerCase();

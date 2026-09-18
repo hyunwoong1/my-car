@@ -14,6 +14,7 @@ from tools import (
     register_vehicle,
     update_maintenance_record,
 )
+from tracer import get_text
 
 load_dotenv()
 
@@ -44,14 +45,6 @@ maintenance_agent = create_agent(
     ),
     name="maintenance_agent",
 )
-
-
-def get_text(message):
-    """ChatBedrockConverse 응답 메시지에서 텍스트만 추출해 반환한다."""
-    content = message.content
-    if isinstance(content, list):
-        return "".join(block.get("text", "") for block in content if isinstance(block, dict))
-    return content
 
 
 if __name__ == "__main__":

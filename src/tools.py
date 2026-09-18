@@ -241,8 +241,6 @@ PLACES_PATH = "data/local_places.json"
 
 def _load_places() -> list[dict]:
     """지역 장소 더미 데이터를 읽어 반환한다."""
-    import json
-
     with open(PLACES_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
