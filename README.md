@@ -31,8 +31,6 @@ Supervisor가 질문을 분류해 3개 서브 에이전트로 위임하고, 여�
 ## 실행 방법
 
 ```bash
-cd mini-pjt
-
 # 콘솔 데모 (질의응답 스트리밍 확인)
 python src/agent.py
 
@@ -49,7 +47,6 @@ Bedrock). 에이전트/심사 모델은 기본값이 `claude-sonnet-4-6`이며 `
 `src/` 모듈들이 flat import라 `PYTHONPATH`를 `src`로 잡아준 뒤 `mini-pjt` 루트에서 uvicorn으로 띄운다.
 
 ```bash
-cd mini-pjt
 $env:PYTHONPATH = "src"; uvicorn api_server:api --port 8000
 ```
 
@@ -83,9 +80,6 @@ RAGAS 라이브러리 대신 같은 개념을 LLM-as-Judge로 직접 계산했�
   - 차종 정보를 세션을 넘는 장기 기억으로 남겨 재확인을 줄이려 했으나, 한 사용자가 차종이 다른
     차량을 여러 대 가질 수 있어 이전에 확인한 차종을 다른 차량 질문에 잘못 넘겨짚을 위험이 있어
     제거했다(커밋 `ebc17c0`). 같은 대화(`thread_id`) 안에서만 문맥을 이어받는다.
-  - 핸드오프 도구(`transfer_to_*`) 결과가 실제 검색 결과인 것처럼 평가 컨텍스트에 섞여 들어간 적이
-    있었다 — `Command` 객체엔 `.content`가 없어 `str(output)`이 그대로 들어간 게 원인이었고, 텍스트
-    내용이 아니라 도구 이름으로 핸드오프 여부를 걸러내도록 고쳤다(`tracer.py`).
 - 최종 채택한 접근 · 왜 그것으로 갔는가
   - `langgraph_supervisor.create_supervisor`로 매뉴얼 검색·정비이력·정비소 조회를 역할별 서브
     에이전트로 분리 — 각 에이전트가 자기 담당이 아닌 질문에는 답을 지어내지 않게 프롬프트로 통제하기
