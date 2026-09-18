@@ -54,6 +54,8 @@ evaluation/
   run_eval.py             평가 실행 스크립트 (round2_*를 계속 덮어씀)
   round1_report.md        최초 베이스라인 리포트
   round2_report.md        최신 평가 리포트
+web/
+  index.html/styles.css/tokens.css/app.js   API 연동 웹 채팅 UI (개인용 앱 셸, Hallmark로 제작)
 ```
 
 ## 실행 방법
@@ -68,7 +70,14 @@ python evaluation/run_eval.py
 ```
 
 `.env`(레포 루트)에 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` 필요
-(Amazon Bedrock, `ChatBedrockConverse` 사용).
+(Amazon Bedrock, `ChatBedrockConverse` 사용). 에이전트/심사 모델은 기본값이 `claude-sonnet-4-6`이며,
+`.env`에 `AGENT_MODEL` / `JUDGE_MODEL`을 넣으면 코드 수정 없이 다른 모델로 바꿀 수 있다.
+
+## 웹 채팅 UI
+
+`web/index.html`을 브라우저로 열면(정적 파일이라 별도 빌드 불필요) API 서버와 통신하는 채팅
+화면을 쓸 수 있다. API 서버가 먼저 떠 있어야 하며, 기본 주소(`http://localhost:8000`)가 아니면
+화면의 "API 주소 설정"에서 바꿀 수 있다.
 
 ## API 서버
 
@@ -85,8 +94,11 @@ $env:PYTHONPATH = "src"; uvicorn api_server:api --port 8000
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
+  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?", "thread_id": "demo-1"}'
 ```
+
+`thread_id`는 선택 필드다. 같은 값을 계속 보내야 그 대화(되물음 → 답변 등)가 이어지고, 생략하면
+매 요청이 새 대화로 처리된다(자세한 내용은 [메모리](#메모리) 참고).
 
 ### 응답 예시
 
@@ -118,7 +130,7 @@ Bedrock 한도 초과)가 나면 연결이 그냥 끊기는 대신 `event: error
 # curl (-N: 버퍼링 없이 바로바로 출력)
 curl -N -X POST http://localhost:8000/query/stream \
   -H "Content-Type: application/json" \
-  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?"}'
+  -d '{"question": "12가3456 차량 마지막 정비가 언제였어?", "thread_id": "demo-1"}'
 ```
 
 ```
