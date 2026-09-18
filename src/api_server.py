@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
-from agent import app as graph_app, stream_answer_tokens
+from agent import app as graph_app, stream_answer_tokens, tracer
 from tracer import RequestRecorder, get_text
 
 api = FastAPI()
@@ -52,7 +52,7 @@ def query(req: QueryRequest) -> QueryResponse:
         {
             # 클라이언트가 thread_id를 보내면 그 대화를 이어가고, 안 보내면 새 대화로 처리한다.
             "configurable": {"thread_id": req.thread_id or str(uuid.uuid4())},
-            "callbacks": [rec],
+            "callbacks": [rec, tracer],
             "recursion_limit": 25,
         },
     )
@@ -81,7 +81,7 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
             for text in stream_answer_tokens(
                 req.question,
                 thread_id=req.thread_id or str(uuid.uuid4()),
-                callbacks=[rec],
+                callbacks=[rec, tracer],
             ):
                 yield _sse_event("token", {"text": text})
         except Exception as e:
@@ -98,6 +98,6 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
 
 
 # 실행(mini-pjt 루트에서, src/ 모듈들이 flat import라 PYTHONPATH=src로 잡아줘야 한다):
-#   PYTHONPATH=src uvicorn api_server:api --port 8000
+# $env:PYTHONPATH = "src"; uvicorn api_server:api --port 8000
 # 테스트(일반): curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d '{"question": "세단 타이어 공기압은 얼마나 자주 점검해야 해?"}'
 # 테스트(스트리밍): curl -N -X POST http://localhost:8000/query/stream -H "Content-Type: application/json" -d '{"question": "세단 타이어 공기압은 얼마나 자주 점검해야 해?"}'

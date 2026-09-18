@@ -216,7 +216,6 @@ a { color: inherit; }
   display: flex; flex-direction: column; gap: var(--space-md); font-size: var(--text-sm);
 }
 .msg { max-width: 88%; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); }
-.msg p { margin: 0; max-width: none; }
 .msg--agent {
   background: var(--color-paper-2); color: var(--color-ink-2);
   border: 1px solid var(--color-rule); align-self: flex-start;
@@ -226,10 +225,36 @@ a { color: inherit; }
   background: var(--color-accent); color: var(--color-accent-ink);
   align-self: flex-end; border-end-end-radius: var(--space-3xs);
 }
-.msg--agent.is-typing p::after {
+
+/* ---------- Message body — rendered markdown (agent) or literal text (user, --plain) ---------- */
+.msg__body { max-width: none; overflow-wrap: anywhere; }
+.msg__body--plain { white-space: pre-wrap; }
+.msg__body > :first-child { margin-top: 0; }
+.msg__body > :last-child { margin-bottom: 0; }
+.msg__body p { margin: 0 0 var(--space-sm); max-width: none; }
+.msg__body ul, .msg__body ol { margin: 0 0 var(--space-sm); padding-inline-start: 1.25em; }
+.msg__body li { margin-bottom: var(--space-3xs); }
+.msg__body li > p { margin: 0; }
+.msg__body strong { font-weight: 600; }
+.msg__body a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.msg__body code {
+  font-family: var(--font-mono); font-size: 0.9em;
+  background: var(--color-paper-3); border-radius: 4px; padding: 1px 5px;
+}
+.msg__body pre {
+  margin: 0 0 var(--space-sm); padding: var(--space-sm);
+  background: var(--color-graphite-deep); color: var(--color-on-graphite);
+  border-radius: var(--radius-sm); overflow-x: auto;
+}
+.msg__body pre code { background: none; padding: 0; color: inherit; }
+.msg__body blockquote {
+  margin: 0 0 var(--space-sm); padding-inline-start: var(--space-sm);
+  border-inline-start: 2px solid var(--color-rule-2); color: var(--color-muted);
+}
+.msg--agent.is-typing .msg__body::after {
   content: "▍"; margin-inline-start: 2px; animation: blink 1s steps(2) infinite;
 }
-@media (prefers-reduced-motion: reduce) { .msg--agent.is-typing p::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .msg--agent.is-typing .msg__body::after { animation: none; } }
 @keyframes blink { 50% { opacity: 0; } }
 
 .chat__form {

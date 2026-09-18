@@ -15,6 +15,35 @@
   }
   let threadId = generateThreadId();
 
+  // ---------- Markdown rendering (agent answers only — user input stays literal) ----------
+  // marked/DOMPurify는 CDN에서 로드된다. 오프라인 등으로 로드에 실패하면
+  // renderMarkdown()이 null을 돌려줘 호출부가 일반 텍스트(pre-wrap)로 대체한다.
+  if (window.marked) marked.setOptions({ gfm: true, breaks: true });
+  if (window.DOMPurify) {
+    DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+      if (node.tagName === "A") {
+        node.setAttribute("target", "_blank");
+        node.setAttribute("rel", "noopener noreferrer");
+      }
+    });
+  }
+
+  function renderMarkdown(text) {
+    if (!window.marked || !window.DOMPurify) return null;
+    return DOMPurify.sanitize(marked.parse(text || ""));
+  }
+
+  function setAgentBody(el, text) {
+    const html = renderMarkdown(text);
+    if (html === null) {
+      el.classList.add("msg__body--plain");
+      el.textContent = text;
+    } else {
+      el.classList.remove("msg__body--plain");
+      el.innerHTML = html;
+    }
+  }
+
   // ---------- Chat ----------
   const messagesEl = document.getElementById("chatMessages");
   const formEl = document.getElementById("chatForm");
@@ -25,9 +54,15 @@
   function addMessage(role, text) {
     const div = document.createElement("div");
     div.className = `msg msg--${role}`;
-    const p = document.createElement("p");
-    p.textContent = text;
-    div.appendChild(p);
+    const body = document.createElement("div");
+    body.className = "msg__body";
+    if (role === "agent") {
+      setAgentBody(body, text);
+    } else {
+      body.classList.add("msg__body--plain");
+      body.textContent = text;
+    }
+    div.appendChild(body);
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return div;
@@ -97,24 +132,26 @@
 
     const agentBubble = addMessage("agent", "");
     agentBubble.classList.add("is-typing");
-    const agentText = agentBubble.querySelector("p");
+    const agentBody = agentBubble.querySelector(".msg__body");
     let received = "";
 
     try {
       await streamQuery(question, (chunk) => {
         received += chunk;
-        agentText.textContent = received;
+        setAgentBody(agentBody, received);
         agentBubble.classList.remove("is-typing");
         messagesEl.scrollTop = messagesEl.scrollHeight;
       });
       if (!received) {
-        agentText.textContent = "답변을 받지 못했습니다. 다시 시도해 주세요.";
+        agentBody.classList.add("msg__body--plain");
+        agentBody.textContent = "답변을 받지 못했습니다. 다시 시도해 주세요.";
       }
       agentBubble.classList.remove("is-typing");
       setStatus("ok", "200 OK");
     } catch (err) {
       agentBubble.classList.remove("is-typing");
-      agentText.textContent =
+      agentBody.classList.add("msg__body--plain");
+      agentBody.textContent =
         `연결에 실패했습니다: ${err.message} — 서버(${getApiBase()})가 실행 중인지, ` +
         "CORS가 허용되어 있는지 확인해 주세요.";
       setStatus("error", "오류");
