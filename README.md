@@ -30,6 +30,12 @@ Supervisor가 질문을 분류해 3개 서브 에이전트로 위임하고, 여�
 
 ## 실행 방법
 
+`.env`(레포 루트)에 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION` 필요(Amazon
+Bedrock). 에이전트/심사 모델은 기본값이 `claude-sonnet-4-6`이며 `.env`의 `AGENT_MODEL`/`JUDGE_MODEL`로
+바꿀 수 있다.
+
+### 1) 콘솔 실행
+
 ```bash
 # 콘솔 데모 (질의응답 스트리밍 확인)
 python src/agent.py
@@ -38,11 +44,7 @@ python src/agent.py
 python evaluation/run_eval.py
 ```
 
-`.env`(레포 루트)에 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_DEFAULT_REGION` 필요(Amazon
-Bedrock). 에이전트/심사 모델은 기본값이 `claude-sonnet-4-6`이며 `.env`의 `AGENT_MODEL`/`JUDGE_MODEL`로
-바꿀 수 있다.
-
-### 1) API 서버 띄우기
+### 2) API 서버 띄우기
 
 `src/` 모듈들이 flat import라 `PYTHONPATH`를 `src`로 잡아준 뒤 `mini-pjt` 루트에서 uvicorn으로 띄운다.
 
@@ -79,7 +81,7 @@ RAGAS 라이브러리 대신 같은 개념을 LLM-as-Judge로 직접 계산했�
     수 기준)로 전환했다(`retriever.py`).
   - 차종 정보를 세션을 넘는 장기 기억으로 남겨 재확인을 줄이려 했으나, 한 사용자가 차종이 다른
     차량을 여러 대 가질 수 있어 이전에 확인한 차종을 다른 차량 질문에 잘못 넘겨짚을 위험이 있어
-    제거했다(커밋 `ebc17c0`). 같은 대화(`thread_id`) 안에서만 문맥을 이어받는다.
+    제거했다. 같은 대화(`thread_id`) 안에서만 문맥을 이어받는다.
 - 최종 채택한 접근 · 왜 그것으로 갔는가
   - `langgraph_supervisor.create_supervisor`로 매뉴얼 검색·정비이력·정비소 조회를 역할별 서브
     에이전트로 분리 — 각 에이전트가 자기 담당이 아닌 질문에는 답을 지어내지 않게 프롬프트로 통제하기
