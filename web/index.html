@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="styles.css" />
@@ -24,7 +24,12 @@
         <span aria-hidden="true">☰</span>
         <span class="sr-only">메뉴 열기</span>
       </button>
-      <span class="wordmark wordmark--sm">정비노트</span>
+      <span class="wordmark wordmark--sm">
+        <svg class="wordmark__mark" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+        정비노트
+      </span>
       <button class="cmdk-trigger cmdk-trigger--compact" id="cmdkTriggerMobile" type="button" aria-haspopup="dialog">
         <kbd>⌘K</kbd>
       </button>
@@ -35,7 +40,12 @@
 
       <aside class="rail" id="rail">
         <div class="rail__top">
-          <a class="wordmark" href="#top">정비노트</a>
+          <a class="wordmark" href="#top">
+            <svg class="wordmark__mark" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>
+            정비노트
+          </a>
           <p class="rail__tagline">개인 차량 관리</p>
         </div>
 
@@ -61,12 +71,9 @@
         </button>
 
         <div class="rail__bottom">
-          <div class="rail__status-row">
-            <span class="status status--idle" id="connStatus">대기</span>
-            <button class="cmdk-trigger" id="cmdkTrigger" type="button" aria-haspopup="dialog">
-              <span>빠른 명령</span><kbd>⌘K</kbd>
-            </button>
-          </div>
+          <button class="cmdk-trigger" id="cmdkTrigger" type="button" aria-haspopup="dialog">
+            <span>빠른 명령</span><kbd>⌘K</kbd>
+          </button>
           <button class="rail__link" id="apiConfigBtn" type="button">API 주소 설정</button>
           <p class="rail__meta">FastAPI + LangGraph Supervisor</p>
         </div>
@@ -74,6 +81,15 @@
 
       <main class="workspace" id="main">
         <div class="chat" id="chat">
+          <div class="chat__toolbar">
+            <span class="chat__toolbar-title">
+              <svg class="wordmark__mark" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>
+              정비노트
+            </span>
+            <span class="status status--idle" id="connStatus">대기</span>
+          </div>
           <div class="chat__log" id="chatMessages" role="log" aria-live="polite">
             <div class="msg msg--agent">
               <p>

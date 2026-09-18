@@ -1,8 +1,11 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S4 R5 V5
- * genre: modern-minimal · macrostructure: bespoke app shell (no catalog macro fits a
- * permanent two-pane utility shell — designed per custom-theme.md § Bespoke depth)
- * theme: cobalt (unchanged from prior build) · nav: N3 side-rail · footer: none (rail status row)
- * redesigned-from: Workbench (adapted landing page) — mood: 개인용 로컬 애플리케이션 */
+/* Hallmark · pre-emit critique: P4 H4 E5 S4 R4 V5
+ * genre: modern-minimal · macrostructure: bespoke app shell (unchanged from prior build)
+ * theme: custom (tuned) — user-specified spec, no external source: heavy geometric sans
+ * (Archivo) + grotesque sentence-case labels (Inter), pure-white paper, cool-blue interactive
+ * accent + magenta atmosphere-only hue, asymmetric overlapping organic-blob backdrop ·
+ * chat has its own toolbar (title + status, moved off the rail) and a layered
+ * header/canvas/compose tonal sandwich + 5-layer elevation shadow for a tool-window feel ·
+ * nav: N3 side-rail · footer: none */
 @import url("tokens.css");
 
 html, body { overflow-x: clip; height: 100%; }
@@ -21,7 +24,7 @@ body {
 
 h1, h2, h3 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 800;
   color: var(--color-ink);
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -67,9 +70,29 @@ a { color: inherit; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn--primary { background: var(--color-accent); color: var(--color-accent-ink); }
+/* Primary button carries the studied "press is the feedback" texture: a solid-colour
+   edge shadow (the button's own thickness) plus a soft cast shadow, lifting on hover and
+   physically depressing on press — never a scale/wobble. */
+.btn--primary {
+  background: var(--color-accent); color: var(--color-accent-ink);
+  box-shadow: 0 3px 0 0 var(--color-accent-deep), 0 5px 10px -3px var(--color-accent-cast);
+  transition: background-color var(--dur-short) var(--ease-out),
+              transform var(--dur-micro) var(--ease-out),
+              box-shadow var(--dur-micro) var(--ease-out);
+}
 @media (hover: hover) and (pointer: fine) {
-  .btn--primary:hover { background: var(--color-accent-hover); }
+  .btn--primary:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 0 var(--color-accent-deep), 0 8px 16px -3px var(--color-accent-cast);
+  }
+}
+.btn--primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 0 var(--color-accent-deep), 0 2px 4px -2px var(--color-accent-cast);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn--primary, .btn--primary:hover, .btn--primary:active { transform: none; }
 }
 .btn--primary[data-loading="true"] { color: transparent; position: relative; }
 .btn--primary[data-loading="true"]::after {
@@ -113,7 +136,7 @@ a { color: inherit; }
 
 .shell__body { flex: 1; min-height: 0; display: flex; position: relative; }
 
-/* ---------- Rail (dark app chrome, N3 side-rail) ---------- */
+/* ---------- Rail (light tinted app chrome, N3 side-rail) ---------- */
 .rail {
   flex: 0 0 260px; width: 260px;
   background: var(--color-graphite); color: var(--color-on-graphite);
@@ -124,13 +147,15 @@ a { color: inherit; }
 }
 .rail__top { display: flex; flex-direction: column; gap: 2px; }
 .wordmark {
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
   font-family: var(--font-display); font-weight: 600; font-size: var(--text-md);
   letter-spacing: -0.015em; text-decoration: none; color: var(--color-on-graphite);
 }
 .wordmark--sm { font-size: var(--text-sm); }
+.wordmark__mark { flex-shrink: 0; color: var(--color-accent-deep); }
 .rail__tagline {
-  margin: 0; font-family: var(--font-mono); font-size: var(--text-xs);
-  color: var(--color-on-graphite-muted); letter-spacing: 0.02em;
+  margin: 0; font-family: var(--font-label); font-size: var(--text-xs);
+  color: var(--color-on-graphite-muted); letter-spacing: 0;
 }
 
 .rail__new-chat {
@@ -142,14 +167,14 @@ a { color: inherit; }
   transition: background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .rail__new-chat:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .rail__new-chat:hover { border-color: var(--color-accent-deep); color: var(--color-accent-deep); }
 }
 .rail__new-chat:active { transform: translateY(1px); }
 
 .rail__quick { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .rail__label {
-  margin: 0 0 var(--space-2xs); font-family: var(--font-mono); font-size: var(--text-xs);
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-on-graphite-muted);
+  margin: 0 0 var(--space-2xs); font-family: var(--font-label); font-size: var(--text-xs);
+  font-weight: 500; color: var(--color-on-graphite-muted);
 }
 .rail__item {
   text-align: left; background: transparent; border: 1px solid transparent;
@@ -169,11 +194,10 @@ a { color: inherit; }
   transition: border-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .rail__info:hover { border-color: var(--color-accent); color: var(--color-on-graphite); }
+  .rail__info:hover { border-color: var(--color-accent-deep); color: var(--color-on-graphite); }
 }
 
 .rail__bottom { margin-top: auto; display: flex; flex-direction: column; gap: var(--space-sm); }
-.rail__status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 
 .rail__link {
   align-self: flex-start; background: none; border: none; padding: 0;
@@ -181,13 +205,13 @@ a { color: inherit; }
   cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
 }
 @media (hover: hover) and (pointer: fine) {
-  .rail__link:hover { color: var(--color-accent); }
+  .rail__link:hover { color: var(--color-accent-deep); }
 }
 .rail__meta { margin: 0; font-size: var(--text-xs); color: var(--color-graphite-rule-3); }
 
 .rail__backdrop { display: none; }
 
-/* ---------- Command palette trigger (dark-chrome only) ---------- */
+/* ---------- Command palette trigger (rail/topbar chrome only) ---------- */
 .cmdk-trigger {
   display: flex; align-items: center; gap: var(--space-xs);
   height: 36px; padding-inline: var(--space-sm);
@@ -197,7 +221,7 @@ a { color: inherit; }
   transition: border-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .cmdk-trigger:hover { border-color: var(--color-accent); color: var(--color-on-graphite); }
+  .cmdk-trigger:hover { border-color: var(--color-accent-deep); color: var(--color-on-graphite); }
 }
 .cmdk-trigger kbd {
   font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.02em;
@@ -211,11 +235,28 @@ a { color: inherit; }
 
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; max-width: 52rem; width: 100%; margin-inline: auto; }
 
+/* The chat's own toolbar — title + live connection status — gives it a tool-window
+   identity of its own instead of reading as a plain content area. Real content, not
+   drawn OS chrome: no window controls, no traffic lights. */
+.chat__toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md); flex: none;
+  background: var(--color-paper-2); border-bottom: 1px solid var(--color-rule);
+}
+.chat__toolbar-title {
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
+  font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm);
+  color: var(--color-ink); letter-spacing: -0.01em;
+}
+
 .chat__log {
   flex: 1; overflow-y: auto; padding: var(--space-lg) clamp(1rem, 3vw, var(--space-lg));
   display: flex; flex-direction: column; gap: var(--space-md); font-size: var(--text-sm);
 }
-.msg { max-width: 88%; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); }
+.msg {
+  max-width: 88%; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-whisper);
+}
 .msg--agent {
   background: var(--color-paper-2); color: var(--color-ink-2);
   border: 1px solid var(--color-rule); align-self: flex-start;
@@ -236,7 +277,7 @@ a { color: inherit; }
 .msg__body li { margin-bottom: var(--space-3xs); }
 .msg__body li > p { margin: 0; }
 .msg__body strong { font-weight: 600; }
-.msg__body a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.msg__body a { color: var(--color-accent-deep); text-decoration: underline; text-underline-offset: 2px; }
 .msg__body code {
   font-family: var(--font-mono); font-size: 0.9em;
   background: var(--color-paper-3); border-radius: 4px; padding: 1px 5px;
@@ -259,7 +300,7 @@ a { color: inherit; }
 
 .chat__form {
   display: flex; gap: var(--space-xs); padding: var(--space-md) clamp(1rem, 3vw, var(--space-lg));
-  border-top: 1px solid var(--color-rule); flex: none;
+  background: var(--color-paper-2); border-top: 1px solid var(--color-rule); flex: none;
 }
 .chat__form input {
   flex: 1; height: 44px; padding-inline: var(--space-md);
@@ -272,16 +313,16 @@ a { color: inherit; }
 @media (hover: hover) and (pointer: fine) {
   .chat__form input:hover { border-color: var(--color-rule-2); background: var(--color-paper-2); }
 }
-.chat__form input:focus-visible { outline-color: var(--color-accent); border-color: var(--color-accent); }
+.chat__form input:focus-visible { outline-color: var(--color-accent-deep); border-color: var(--color-accent-deep); }
 .chat__form input:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ---------- Status pill (dark-chrome only: rail + code-card bar) ---------- */
+/* ---------- Status pill (rail status row + code-card bar) ---------- */
 .status {
-  font: 500 var(--text-xs) var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase;
+  font: 500 var(--text-xs) var(--font-label);
   padding: 2px 8px; border-radius: 4px; white-space: nowrap;
 }
 .status--idle { color: var(--color-on-graphite-muted); border: 1px solid var(--color-graphite-rule-3); }
-.status--ok { color: var(--color-accent); border: 1px solid var(--color-accent-border); }
+.status--ok { color: var(--color-accent-deep); border: 1px solid var(--color-accent-border); }
 .status--error { color: var(--color-error); border: 1px solid var(--color-error-border); }
 
 /* ---------- Info dialog (동작 방식 · FAQ — replaces the scrolled marketing sections) ---------- */
@@ -305,7 +346,7 @@ a { color: inherit; }
 .info-steps { list-style: none; margin: 0 0 var(--space-md); padding: 0; display: flex; flex-direction: column; gap: var(--space-md); }
 .info-steps li { display: flex; gap: var(--space-md); }
 .info-steps__index {
-  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-accent);
+  font-family: var(--font-label); font-weight: 600; font-size: var(--text-sm); color: var(--color-accent-deep);
   flex-shrink: 0; padding-top: 2px;
 }
 .info-steps p { margin: 0; color: var(--color-muted); max-width: 46ch; }
@@ -324,7 +365,7 @@ a { color: inherit; }
   margin: 0; padding: var(--space-md); font-family: var(--font-mono); font-size: var(--text-xs);
   color: var(--color-on-graphite); overflow-x: auto; line-height: 1.7;
 }
-.code-card__body .tok-key { color: var(--color-accent); }
+.code-card__body .tok-key { color: var(--color-accent-deep); }
 .code-card__body .tok-str { color: var(--color-code-string); }
 .code-card__body .tok-muted { color: var(--color-on-graphite-muted); }
 
@@ -338,7 +379,7 @@ a { color: inherit; }
 }
 .faq__list summary::-webkit-details-marker { display: none; }
 .faq__list summary::after {
-  content: "+"; font-family: var(--font-mono); color: var(--color-accent); flex-shrink: 0;
+  content: "+"; font-family: var(--font-mono); color: var(--color-accent-deep); flex-shrink: 0;
   transition: transform var(--dur-short) var(--ease-out);
 }
 .faq__list details[open] summary::after { transform: rotate(45deg); }
@@ -366,7 +407,7 @@ a { color: inherit; }
   display: flex; justify-content: space-between; gap: var(--space-md);
 }
 .cmdk__list li[aria-selected="true"] { background: var(--color-paper-2); color: var(--color-ink); }
-.cmdk__list li span.hint { color: var(--color-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
+.cmdk__list li span.hint { color: var(--color-muted); font-family: var(--font-label); font-size: var(--text-xs); }
 
 /* ---------- Responsive: rail collapses to a drawer under 60rem ---------- */
 @media (max-width: 60rem) {
@@ -389,4 +430,33 @@ a { color: inherit; }
 @media (max-width: 40rem) {
   .info-dialog { padding: var(--space-sm); }
   .info-dialog__panel { max-height: 92vh; }
+}
+
+/* ---------- Chat as one floating "device" surface — desktop only. A phone-width
+   viewport already IS the device, so mobile keeps the plain edge-to-edge layout above.
+   Backdrop is an asymmetric, overlapping organic-gradient composition (Tier A CSS art —
+   no images): two soft blue blobs plus one magenta blob, magenta appearing only here,
+   never on an interactive element. color-mix() keeps every stop a reference to a locked
+   token instead of a raw translucent colour literal. ---------- */
+@media (min-width: 60rem) {
+  .workspace {
+    padding: clamp(1.5rem, 4vw, var(--space-2xl));
+    background-color: var(--color-paper);
+    background-repeat: no-repeat;
+    background-image:
+      radial-gradient(38rem 32rem at 10% 6%,
+        color-mix(in oklch, var(--color-accent) 45%, transparent), transparent 68%),
+      radial-gradient(34rem 30rem at 92% 88%,
+        color-mix(in oklch, var(--color-atmosphere) 42%, transparent), transparent 70%),
+      radial-gradient(22rem 20rem at 82% 12%,
+        color-mix(in oklch, var(--color-accent) 26%, transparent), transparent 65%);
+  }
+  .chat {
+    max-width: 85%;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
 }

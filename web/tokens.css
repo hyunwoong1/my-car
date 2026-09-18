@@ -1,84 +1,90 @@
-/* Hallmark tokens · theme: cobalt · genre: modern-minimal
- * paper: cool light (L 98.5%, hue ~250) · display: Space Grotesk · accent: electric cobalt
- */
+/* Hallmark tokens · theme: custom (tuned) · genre: modern-minimal
+ * brief: user-specified spec (no external source — display: heavy geometric sans, body: same
+ * family regular, label: grotesque sentence-case, paper: light pure white, accent: cool blue
+ * (interactive) + magenta (atmosphere-only, backdrop blobs), rhythm: asymmetric overlapping
+ * organic blobs. Previous theme (studied-DNA/Hum) fully replaced per explicit re-theme request.
+ * display+body: Archivo (heavy 800/900 for display, 400 for body) · label: Inter (sentence case)
+ * mono: JetBrains Mono, code blocks only — not used for UI labels in this theme. */
 :root {
-  /* Colour — cool engineered paper, never pure white/black */
-  --color-paper:      oklch(98.5% 0.004 250);
-  --color-paper-2:    oklch(96%   0.006 250);
-  --color-paper-3:    oklch(93%   0.008 250);
-  --color-rule:       oklch(88%   0.010 252);
-  --color-rule-2:     oklch(80%   0.014 252);
-  --color-ink:        oklch(24%   0.020 258);
-  --color-ink-2:      oklch(34%   0.018 257);
-  --color-muted:      oklch(52%   0.014 256);
+  /* Colour — light, pure white paper (explicit user spec — no warm/cream tint this time) */
+  --color-paper:      oklch(100% 0 0);
+  --color-paper-2:    oklch(97% 0 0);
+  --color-paper-3:    oklch(94% 0 0);
+  --color-rule:       oklch(90% 0 0);
+  --color-rule-2:     oklch(82% 0 0);
+  --color-ink:        oklch(18% 0.01 260);
+  --color-ink-2:      oklch(30% 0.01 260);
+  --color-muted:      oklch(50% 0.01 260);
 
-  --color-accent:       oklch(58% 0.20 256);
-  --color-accent-hover: oklch(52% 0.20 256);
-  --color-accent-ink:   oklch(99% 0.005 256);
-  --color-accent-border: oklch(58% 0.20 256 / 0.4);
-  --color-focus:        oklch(58% 0.20 256);
+  /* Accent — cool blue carries every interactive surface (fill + text both work off one
+     value, since it's dark/saturated enough for either role against white paper). Magenta is
+     atmosphere-only: it never appears on a button, link, or focus ring — only in the backdrop
+     blob gradient behind the chat card. */
+  --color-accent:        oklch(58% 0.19 258);
+  --color-accent-hover:  oklch(52% 0.20 258);
+  --color-accent-ink:    oklch(99% 0 0);
+  --color-accent-deep:   oklch(46% 0.18 258);
+  --color-accent-border: oklch(58% 0.19 258 / 0.4);
+  --color-accent-cast:   oklch(58% 0.19 258 / 0.35);
+  --color-focus:         oklch(52% 0.20 258);
+  --color-atmosphere:    oklch(58% 0.20 340);
 
-  --color-graphite:      oklch(22% 0.016 258);
-  --color-graphite-2:    oklch(28% 0.016 258);
-  --color-graphite-3:    oklch(31% 0.016 258);
-  --color-graphite-deep: oklch(19% 0.014 258);
-  --color-graphite-rule:   oklch(34% 0.018 258);
-  --color-graphite-rule-2: oklch(38% 0.016 258);
-  --color-graphite-rule-3: oklch(40% 0.016 258);
-  --color-on-graphite: oklch(94% 0.006 258);
-  --color-on-graphite-muted: oklch(72% 0.012 258);
+  /* Chrome (rail / topbar / code well) — same light-neutral family as the workspace paper,
+     one step deeper for separation */
+  --color-graphite:        oklch(97% 0 0);
+  --color-graphite-2:      oklch(94% 0 0);
+  --color-graphite-3:      oklch(90% 0 0);
+  --color-graphite-deep:   oklch(95% 0 0);
+  --color-graphite-rule:   oklch(88% 0 0);
+  --color-graphite-rule-2: oklch(80% 0 0);
+  --color-graphite-rule-3: oklch(84% 0 0);
+  --color-on-graphite:        oklch(18% 0.01 260);
+  --color-on-graphite-muted:  oklch(48% 0.012 260);
 
-  --color-error:        oklch(58% 0.20 25);
-  --color-error-border: oklch(58% 0.20 25 / 0.4);
-  --color-success:      oklch(62% 0.16 152);
-  --color-code-string:  oklch(80% 0.08 150);
+  --color-error:        oklch(50% 0.19 25);
+  --color-error-border: oklch(50% 0.19 25 / 0.4);
+  --color-success:      oklch(46% 0.13 152);
+  --color-code-string:  oklch(46% 0.15 340);
 
-  --color-scrim:  oklch(20% 0.01 258 / 0.4);
-  --shadow-whisper: 0 1px 2px oklch(24% 0.02 258 / 0.08);
-  --shadow-modal:   0 8px 24px oklch(20% 0.02 258 / 0.18);
+  --color-scrim:  oklch(18% 0.01 260 / 0.42);
+  --shadow-whisper: 0 1px 2px oklch(18% 0.01 260 / 0.08);
+  --shadow-modal:   0 8px 24px oklch(18% 0.01 260 / 0.18);
+  /* Card elevation — three neutral layers (tight contact, mid, broad ambient) for a real
+     sense of depth, plus a faint accent-tinted glow so the card reads as catching light
+     bounced up from the colourful backdrop behind it, not just floating in a vacuum. */
+  --shadow-card:
+    0 1px 2px oklch(18% 0.01 260 / 0.07),
+    0 8px 16px -8px oklch(18% 0.01 260 / 0.18),
+    0 28px 52px -22px oklch(18% 0.01 260 / 0.24),
+    0 0 0 1px oklch(18% 0.01 260 / 0.04),
+    0 18px 36px -20px color-mix(in oklch, var(--color-accent) 18%, transparent);
 
-  /* Type */
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Type — Archivo carries display (heavy) + body (regular) per spec; Inter is the label
+     role (sentence case, replaces the old uppercase-mono label convention); JetBrains Mono
+     is reserved for the one genuine code block (info dialog's example JSON response). */
+  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-label:   "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 
-  --text-xs:   0.75rem;
-  --text-sm:   0.875rem;
-  --text-base: 1rem;
-  --text-md:   1.125rem;
-  --text-lg:   1.375rem;
-  --text-xl:   1.75rem;
-  --text-2xl:  2.25rem;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-base: 1rem; --text-md: 1.125rem;
+  --text-lg: 1.375rem; --text-xl: 1.75rem; --text-2xl: 2.25rem;
   --text-display: clamp(2.25rem, 4vw + 1rem, 3.4rem);
 
-  /* Space — 4pt scale */
-  --space-3xs: 0.125rem;
-  --space-2xs: 0.25rem;
-  --space-xs:  0.5rem;
-  --space-sm:  0.75rem;
-  --space-md:  1rem;
-  --space-lg:  1.5rem;
-  --space-xl:  2.5rem;
-  --space-2xl: 4rem;
-  --space-3xl: 6rem;
+  --space-3xs: 0.125rem; --space-2xs: 0.25rem; --space-xs: 0.5rem; --space-sm: 0.75rem;
+  --space-md: 1rem; --space-lg: 1.5rem; --space-xl: 2.5rem; --space-2xl: 4rem; --space-3xl: 6rem;
 
-  /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-micro: 120ms;
-  --dur-short: 220ms;
-  --dur-long:  420ms;
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
 
-  /* Radii — tight, drawn-with-a-ruler */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* Radii — tightened back down from the previous theme's big-rounded/pill system: a heavy
+     geometric-sans register reads more precise than soft, so buttons go back to a modest
+     rounded-rect instead of a full pill. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 
-  /* Z-scale */
-  --z-base: 1;
-  --z-raised: 10;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-modal: 400;
-  --z-toast: 500;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-modal: 400; --z-toast: 500;
 }
